@@ -1,0 +1,17 @@
+#
+# Copyright IBM Corporation 2020
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+# Contributors:
+#   IBM Corporation - implementation
+#
+
+displayName: Wazi Development Client
+description: IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, Zowe CLI 6.3, Zowe Explorer 1.6, IBM User Build 1.0
+tags: ["COBOL", "PL/I", "PLI", "PL1", "HLASM", "JCL", "IDE", "USER BUILD", "LSP", "language-server", "z/OS", "zOS", "IBM Z", "Z Software", "Zowe", "Mainframe"]
+icon: /images/app-icon-light-.svg
+globalMemoryLimit: 3000Mi

@@ -1,0 +1,38 @@
+#
+# Copyright IBM Corporation 2020
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+# Contributors:
+#   IBM Corporation - implementation
+#
+
+apiVersion: 1.0.0
+metadata:
+    generateName: waziclient-
+projects:
+  -
+    name: zopeneditor-sample
+    source:
+      type: git
+      location: "https://github.com/IBM/zopeneditor-sample.git"
+      branch: wazi-master
+components:
+-
+  type: chePlugin
+  id: ibm/wazi-development-client/1.0.0
+  alias: wazi-development-client
+-
+  type: dockerimage
+  alias: wazi
+  image: docker.io/ibmcom/wazi-code-codeready:latest
+  memoryLimit: 512Mi
+  volumes:
+    - name: wazi
+      containerPath: /home/wazi/.zowe
+    - name: m2
+      containerPath: /home/wazi/.m2
+  mountSources: true

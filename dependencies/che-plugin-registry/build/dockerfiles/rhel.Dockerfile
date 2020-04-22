@@ -1,5 +1,6 @@
 #
-# Copyright (c) 2018-2020 Red Hat, Inc.
+# Copyright (c) 2019 Red Hat, Inc.
+# Copyright IBM Corporation 2020
 # This program and the accompanying materials are made
 # available under the terms of the Eclipse Public License 2.0
 # which is available at https://www.eclipse.org/legal/epl-2.0/
@@ -8,6 +9,7 @@
 #
 # Contributors:
 #   Red Hat, Inc. - initial API and implementation
+#   IBM Corporation - implementation
 #
 
 # Builder: check meta.yamls and create index.json
@@ -73,11 +75,25 @@ RUN chmod -R g+rwX /build
 # https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/rhscl/httpd-24-rhel7
 FROM registry.access.redhat.com/rhscl/httpd-24-rhel7:2.4-110 AS registry
 
+ENV PRODUCT="IBM Wazi for CodeReady Workspaces Development Client" \
+    COMPANY="IBM" \
+    VERSION="1.0.0" \
+    RELEASE="1" \
+    SUMMARY="IBM Wazi for CodeReady Workspaces Development Client - Plugin" \
+    DESCRIPTION="IBM Wazi for CodeReady Workspaces Development Client - Plugin Registry"
+
+LABEL name="$COMPANY-$PRODUCT" \
+      vendor="$COMPANY" \
+      version="$VERSION" \
+      release="$RELEASE" \
+      summary="$SUMMARY" \
+      description="$DESCRIPTION"
+      
 # DOWNSTREAM: use RHEL8/httpd
 # https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/rhel8/httpd-24
 # FROM registry.redhat.io/rhel8/httpd-24:1-89 AS registry
 USER 0
-RUN yum update -y systemd && yum clean all && rm -rf /var/cache/yum && \
+RUN yum update -y systemd bind-libs && yum clean all && rm -rf /var/cache/yum && \
     echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages"
 
 # BEGIN these steps might not be required
@@ -95,6 +111,7 @@ WORKDIR /var/www/html
 RUN mkdir -m 777 /var/www/html/v3
 COPY .htaccess README.md /var/www/html/
 COPY --from=builder /build/v3 /var/www/html/v3
+COPY ./LICENSE /licenses/
 COPY ./build/dockerfiles/rhel.entrypoint.sh ./build/dockerfiles/entrypoint.sh /usr/local/bin/
 RUN chmod g+rwX /usr/local/bin/entrypoint.sh /usr/local/bin/rhel.entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
