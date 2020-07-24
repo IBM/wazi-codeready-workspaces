@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/IBM/wazi-codeready-workspaces.svg?branch=master)](https://travis-ci.com/IBM/wazi-codeready-workspaces)
+[![Build Status](https://travis-ci.com/IBM/wazi-codeready-workspaces.svg?branch=main)](https://travis-ci.com/IBM/wazi-codeready-workspaces)
 [![Release](https://img.shields.io/github/release/IBM/wazi-codeready-workspaces.svg)](../../releases/latest)
 [![License](https://img.shields.io/github/license/IBM/wazi-codeready-workspaces)](LICENSE)
 [![DockerHub](https://img.shields.io/badge/DockerHub-DevFile-blue?color=3498db)](https://hub.docker.com/repository/docker/ibmcom/wazi-code-dev-file)
