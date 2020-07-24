@@ -13,6 +13,6 @@ env:
   - IMAGE_NAME_PLUGIN="wazi-code-plugin"
   - IMAGE_NAME_DEVFILE="wazi-code-dev-file"
 install: 
-  - docker build -t ${REPOSITORY}${FOLDER_PATH}${IMAGE_NAME_PLUGIN}:latest -f ./dependencies/che-plugin-registry/build/dockerfiles/rhel.Dockerfile --build-arg "USE_DIGESTS=false" --build-arg "PATCHED_IMAGES_TAG=1.0.0" --target "registry" ./dependencies/che-plugin-registry/
+  - docker build -t ${REPOSITORY}${FOLDER_PATH}${IMAGE_NAME_PLUGIN}:latest -f ./dependencies/che-plugin-registry/build/dockerfiles/rhel.Dockerfile --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-plugin-registry/
   - docker build -t ${REPOSITORY}${FOLDER_PATH}${IMAGE_NAME_DEVFILE}:latest -f ./dependencies/che-devfile-registry/build/dockerfiles/rhel.Dockerfile --build-arg "USE_DIGESTS=false" --build-arg "PATCHED_IMAGES_TAG=1.0.0" --target "registry" ./dependencies/che-devfile-registry/
 script: echo "Success!"
