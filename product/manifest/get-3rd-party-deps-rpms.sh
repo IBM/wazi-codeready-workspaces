@@ -2,13 +2,17 @@
 
 # script to generate a manifest of all the rpms installed into the containers
 
+# candidateTag="crw-2.0-rhel-8-candidate" # 2.0, 2.1
+candidateTag="crw-2.2-rhel-8-container-candidate" # 2.2
+
+getLatestImageFlag="" # placeholder for a --crw22 flag to pass to getLatestImageTags.sh
 allNVRs=""
 MATCH=""
 quiet=0
 HELP="
 
 How to use this script:
-NVR1 NVR2 ...   | list of NVRs to query. If omitted, generate list from crw-2.0-rhel-8-candidate
+NVR1 NVR2 ...   | list of NVRs to query. If omitted, generate list from ${candidateTag}
 -h,     --help  | show this help menu
 -g \"regex\"      | if provided, grep resulting rpm logs for matching regex
 
@@ -22,16 +26,25 @@ $0 # to generate overall log for all latest NVRs
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     '-h'|'--help') echo -e "$HELP"; exit 1;;
+    '--crw'*) getLatestImageFlag="$1"; shift 1;;
+    '-v')    CSV_VERSION="$2";     shift 2;;
     '-g')          MATCH="$2";     shift 2;;
     '-q')          quiet=1;        shift 1;;
     *)  allNVRs="${allNVRs} $1"; shift 1;;
   esac
 done
 
+# compute version from latest operator package.yaml, eg., 2.2.0
+# TODO when we switch to OCP 4.6 bundle format, extract this version from another place
+if [[ ! ${CSV_VERSION} ]]; then 
+  CSV_VERSION=$(curl -sSLo - https://raw.githubusercontent.com/redhat-developer/codeready-workspaces-operator/master/controller-manifests/codeready-workspaces.package.yaml | yq .channels[0].currentCSV -r | sed -r -e "s#crwoperator.v##")
+fi
+
 cd /tmp
-MANIFEST_FILE=/tmp/manifest-rpms.txt
-MANIFEST_UNIQ_FILE=/tmp/manifest-rpms_uniq.txt
-LOG_FILE=/tmp/manifest-rpms_log.txt
+mkdir -p ${WORKSPACE}/${CSV_VERSION}/rpms
+MANIFEST_FILE="${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms.txt"
+MANIFEST_UNIQ_FILE="${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms_uniq.txt"
+LOG_FILE="${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms_log.txt"
 rm -fr ${MANIFEST_FILE} ${LOG_FILE}
 
 function log () {
@@ -51,7 +64,8 @@ function loadNVRs() {
 	pushd /tmp >/dev/null
 	curl -sSLO https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/product/getLatestImageTags.sh
 	chmod +x getLatestImageTags.sh
-	/tmp/getLatestImageTags.sh --nvr | tee /tmp/getLatestImageTags.sh.nvrs.txt
+	mnf "Latest image list ${getLatestImageFlag}"
+	/tmp/getLatestImageTags.sh ${getLatestImageFlag} --nvr | tee /tmp/getLatestImageTags.sh.nvrs.txt
 	loadNVRs_return="$(cat /tmp/getLatestImageTags.sh.nvrs.txt)"
 	popd >/dev/null
 }
@@ -90,7 +104,7 @@ function loadNVRlog() {
 }
 
 if [[ ${allNVRs} == "" ]]; then
-	log "Compute list of latest crw-2.0-rhel-8-candidate NVRs ... ";
+	log "Compute list of latest ${candidateTag} NVRs ... ";
 	loadNVRs; allNVRs="${allNVRs} ${loadNVRs_return}"
 	log ""
 fi
@@ -104,7 +118,7 @@ log ""
 # allNVRs=codeready-workspaces-stacks-python-container-2.0-6
 log "Brew logs:"
 for NVR in ${allNVRs}; do
-	MANIFEST_FILE2=/tmp/manifest-rpms-${NVR}.txt
+	MANIFEST_FILE2="${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms-${NVR}.txt"
 	rm -fr ${MANIFEST_FILE2}
 	loadNVRlog $NVR ${MANIFEST_FILE2}
 done
@@ -121,7 +135,7 @@ fi
 ##################################
 
 # get uniq list of RPMs
-cat /tmp/manifest-rpms-codeready-workspaces-* | sed -r -e "s#.+:2.1-[0-9]+/# #g" | sort | uniq > ${MANIFEST_UNIQ_FILE}
+cat ${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms-codeready-workspaces-* | sed -r -e "s#.+:2.1-[0-9]+/# #g" | sort | uniq > ${MANIFEST_UNIQ_FILE}
 
 ##################################
 
@@ -132,13 +146,13 @@ echo "Long RPM log is in file: ${LOG_FILE}" | tee -a ${LOG_FILE}
 echo "" | tee -a ${LOG_FILE}
 echo "Individual RPM manifests:" | tee -a ${LOG_FILE}
 for NVR in ${allNVRs}; do 
-	echo "* /tmp/manifest-rpms-${NVR}.txt" | tee -a ${LOG_FILE}
+	echo "* ${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms-${NVR}.txt" | tee -a ${LOG_FILE}
 	if [[ ${MATCH} ]]; then
-		egrep "${MATCH}" /tmp/manifest-rpms-${NVR}.txt | sed -e "s#${NVR/container-/container:}/#    #" | tee -a ${LOG_FILE}
+		egrep "${MATCH}" ${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms-${NVR}.txt | sed -e "s#${NVR/container-/container:}/#    #" | tee -a ${LOG_FILE}
 	fi
 done
 echo "" | tee -a ${LOG_FILE}
 
-cat /tmp/manifest-rpms-codeready-workspaces-* | sed -r -e "s#.+:2.1-[0-9]+/# #g" | sort | uniq > ${MANIFEST_UNIQ_FILE}
+cat ${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms-codeready-workspaces-* | sed -r -e "s#.+:2.1-[0-9]+/# #g" | sort | uniq > ${MANIFEST_UNIQ_FILE}
 
 ##################################

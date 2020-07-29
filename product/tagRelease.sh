@@ -1,5 +1,13 @@
 #!/bin/bash
 #
+# Copyright (c) 2019-2020 Red Hat, Inc.
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+
 # script to tag the Che/CRW repos for a given release
 
 if [[ ! $1 ]]; then
@@ -11,8 +19,9 @@ else
 fi
 
 # source branches to tag
-pkgs_devel_branch=crw-2.0-rhel-8
-che_operator_branch=crw-2.1
+pkgs_devel_branch=crw-2.2-rhel-8
+# TODO is this branch still required for 2.2?
+che_operator_branch=crw-2.2
 crw_repos_branch=master 
 # source branches to tag
 
