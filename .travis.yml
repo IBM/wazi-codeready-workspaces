@@ -8,11 +8,17 @@ services:
 - docker
 env:
   global:
+  - CURRENT_VERSION="1.1.0"
   - REPOSITORY="docker.io"
   - FOLDER_PATH="/ibmcom/"
   - IMAGE_NAME_PLUGIN="wazi-code-plugin"
   - IMAGE_NAME_DEVFILE="wazi-code-dev-file"
 before_install:
+  - mkdir -p ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-development-client/${CURRENT_VERSION}/extensions
+  - curl https://public.dhe.ibm.com/ibmdl/export/pub/software/htp/zos/tools/wazi/wazi-development-client-1.0.0-20200624.zip | jar xv
+  - mv Zowe.vscode-extension-for-zowe-1.6.0.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-development-client/${CURRENT_VERSION}/extensions/wazi-vscode-extension-for-zowe.vsix
+  - mv zopeneditor-1.0.1.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-development-client/${CURRENT_VERSION}/extensions/zopeneditor.vsix
+  - mv userbuild-1.0.0.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-development-client/${CURRENT_VERSION}/extensions/userbuild.vsix
 install: 
   - docker build -t ${REPOSITORY}${FOLDER_PATH}${IMAGE_NAME_PLUGIN}:latest -f ./dependencies/che-plugin-registry/build/dockerfiles/rhel.Dockerfile --build-arg "PATCHED_IMAGES_TAG=2.2" --build-arg LATEST_ONLY="false" --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-plugin-registry/
   - docker build -t ${REPOSITORY}${FOLDER_PATH}${IMAGE_NAME_DEVFILE}:latest -f ./dependencies/che-devfile-registry/build/dockerfiles/rhel.Dockerfile --build-arg "PATCHED_IMAGES_TAG=2.2" --build-arg LATEST_ONLY="false" --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-devfile-registry/
