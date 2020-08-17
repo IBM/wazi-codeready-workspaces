@@ -82,7 +82,7 @@ FROM registry.access.redhat.com/rhscl/httpd-24-rhel7:2.4-117.1593607199 AS regis
 
 ENV PRODUCT="IBM Wazi for CodeReady Workspaces Development Client" \
     COMPANY="IBM" \
-    VERSION="1.0.0" \
+    VERSION="1.1.0" \
     RELEASE="1" \
     SUMMARY="IBM Wazi for CodeReady Workspaces Development Client - Plugin" \
     DESCRIPTION="IBM Wazi for CodeReady Workspaces Development Client - Plugin Registry"
@@ -101,8 +101,19 @@ USER 0
 # latest httpd container doesn't include ssl cert, so generate one
 RUN chmod +x /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh && \
     /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh
-RUN yum update -y gnutls systemd && yum clean all && rm -rf /var/cache/yum && \
+RUN yum update -y gnutls systemd dbus && yum clean all && rm -rf /var/cache/yum && \
     echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages"
+# Fix for SSL config issues for VA Scan
+RUN echo "SSLEngine on" >> /etc/httpd/conf/httpd.conf && \
+    echo "SSLProtocol -ALL -SSLv3 +TLSv1.2" >> /etc/httpd/conf/httpd.conf && \
+    echo "<VirtualHost _default_:8443>" >> /etc/httpd/conf/httpd.conf && \
+    echo "SSLCertificateFile /etc/httpd/tls/localhost.crt" >> /etc/httpd/conf/httpd.conf && \
+    echo "SSLCertificateKeyFile /etc/httpd/tls/localhost.key" >> /etc/httpd/conf/httpd.conf && \
+    echo "SSLCipherSuite HIGH:!aNULL:!MD5" >> /etc/httpd/conf/httpd.conf && \
+    echo "</VirtualHost>" >> /etc/httpd/conf/httpd.conf && \
+    echo "<FilesMatch "\""^\\.ht"\"">" >> /etc/httpd/conf/httpd.conf && \
+    echo "Require all denied" >> /etc/httpd/conf/httpd.conf && \
+    echo "</FilesMatch>" >> /etc/httpd/conf/httpd.conf
 
 # BEGIN these steps might not be required
 RUN sed -i /etc/httpd/conf/httpd.conf \
