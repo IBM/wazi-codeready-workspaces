@@ -104,14 +104,7 @@ RUN chmod +x /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh && \
 RUN yum update -y gnutls systemd dbus && yum clean all && rm -rf /var/cache/yum && \
     echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages"
 # Fix for SSL config issues for VA Scan
-RUN echo "SSLEngine on" >> /etc/httpd/conf/httpd.conf && \
-    echo "SSLProtocol -ALL -SSLv3 +TLSv1.2" >> /etc/httpd/conf/httpd.conf && \
-    echo "<VirtualHost _default_:8443>" >> /etc/httpd/conf/httpd.conf && \
-    echo "SSLCertificateFile /etc/httpd/tls/localhost.crt" >> /etc/httpd/conf/httpd.conf && \
-    echo "SSLCertificateKeyFile /etc/httpd/tls/localhost.key" >> /etc/httpd/conf/httpd.conf && \
-    echo "SSLCipherSuite HIGH:!aNULL:!MD5" >> /etc/httpd/conf/httpd.conf && \
-    echo "</VirtualHost>" >> /etc/httpd/conf/httpd.conf && \
-    echo "<FilesMatch "\""^\\.ht"\"">" >> /etc/httpd/conf/httpd.conf && \
+RUN echo "<FilesMatch "\""^\\.ht"\"">" >> /etc/httpd/conf/httpd.conf && \
     echo "Require all denied" >> /etc/httpd/conf/httpd.conf && \
     echo "</FilesMatch>" >> /etc/httpd/conf/httpd.conf
 
