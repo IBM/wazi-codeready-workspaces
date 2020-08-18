@@ -99,10 +99,6 @@ RUN chmod +x /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh && \
     /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh
 RUN yum update -y gnutls systemd dbus && yum clean all && rm -rf /var/cache/yum && \
     echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages"
-# Fix for SSL config issues for VA Scan
-RUN echo "<FilesMatch "\""^\\.ht"\"">" >> /etc/httpd/conf/httpd.conf && \
-    echo "Require all denied" >> /etc/httpd/conf/httpd.conf && \
-    echo "</FilesMatch>" >> /etc/httpd/conf/httpd.conf
     
 # BEGIN these steps might not be required
 RUN sed -i /etc/httpd/conf/httpd.conf \
