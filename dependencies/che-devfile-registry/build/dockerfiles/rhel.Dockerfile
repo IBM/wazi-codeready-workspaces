@@ -103,6 +103,10 @@ RUN yum update -y gnutls systemd dbus && yum clean all && rm -rf /var/cache/yum 
 RUN echo "<FilesMatch "\""^\\.ht"\"">" >> /etc/httpd/conf/httpd.conf && \
     echo "Require all denied" >> /etc/httpd/conf/httpd.conf && \
     echo "</FilesMatch>" >> /etc/httpd/conf/httpd.conf
+# Fix for SSL from VA Scan
+RUN sed -i /etc/httpd/conf.d/ssl.conf \
+    -e "s,SSLProtocol all -SSLv2,SSLProtocol all -SSLv3," \
+    -e "s,SSLCipherSuite HIGH:MEDIUM:!aNULL:!MD5,SSLCipherSuite HIGH:!aNULL:!MD5,"
         
 # BEGIN these steps might not be required
 RUN sed -i /etc/httpd/conf/httpd.conf \
