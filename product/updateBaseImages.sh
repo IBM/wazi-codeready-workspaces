@@ -151,8 +151,9 @@ for d in $(find ${WORKDIR} -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort); do
 		else
 			BRANCHUSED=${BRANCH}
 		fi
-		git branch --set-upstream-to=origin/${BRANCHUSED} ${BRANCHUSED} -q
-		git checkout ${BRANCHUSED} -q && git pull -q
+		git branch --set-upstream-to=origin/${BRANCHUSED} ${BRANCHUSED} -q || true
+		git checkout ${BRANCHUSED} -q || true 
+		git pull -q || true
 		if [[ ${pushedIn} -eq 1 ]]; then popd >/dev/null; pushedIn=0; fi
 
 		QUERY=""
@@ -222,9 +223,10 @@ for d in $(find ${WORKDIR} -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort); do
 										git push origin "${PR_BRANCH}"
 										lastCommitComment="$(git log -1 --pretty=%B)"
 										if [[ $(/usr/local/bin/hub version 2>/dev/null || true) ]] || [[ $(which hub 2>/dev/null || true) ]]; then
-											hub pull-request -f -m "${lastCommitComment}
+											# collect additional commits in the same PR if it already exists 
+											{ hub pull-request -f -m "chore(base images) Update base image(s) to latest tag(s)
 
-${lastCommitComment}" -b "${BRANCHUSED}" -h "${PR_BRANCH}" "${OPENBROWSERFLAG}"
+${lastCommitComment}" -b "${BRANCHUSED}" -h "${PR_BRANCH}" "${OPENBROWSERFLAG}"; } || { git merge master; git push origin "${PR_BRANCH}"; }
 										else
 											echo "# Warning: hub is required to generate pull requests. See https://hub.github.com/ to install it."
 											echo -n "# To manually create a pull request, go here: "
