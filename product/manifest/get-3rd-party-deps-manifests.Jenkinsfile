@@ -1,8 +1,8 @@
 #!/usr/bin/env groovy
 
 // PARAMETERS for this pipeline:
-// CSV_VERSION = 2.2.0
-// CRW_VERSION_FLAG = --crw22
+// CSV_VERSION = 2.3.0
+// getLatestImageTagsFlags="--crw23" # placeholder for flag to pass to getLatestImageTags.sh
 
 def buildNode = "rhel7-releng" // node label
 
@@ -32,9 +32,30 @@ timeout(20) {
               userRemoteConfigs: [[url: "https://github.com/redhat-developer/codeready-workspaces.git"]]])
 
               sh '''#!/bin/bash -xe
-# install yq, python, php, and golang
-sudo yum install -y jq python3-six python3-pip golang php-devel
+# install yq, python w/ virtualenv, pip, golang, nodejs, npm
+sudo yum -y install jq python3-six python3-pip python-virtualenv-api python-virtualenv-clone python-virtualenvwrapper python36-virtualenv \
+  golang nodejs npm epel-release
 sudo /usr/bin/python3 -m pip install --upgrade pip yq
+
+# instal php 7.3 for RHEL 7 via EPEL and remi
+sudo yum -y -q remove php; sudo rm -fr /usr/bin/php /usr/bin/php-cgi
+sudo yum -y -q install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm || true
+sudo yum -y -q install http://rpms.remirepo.net/enterprise/remi-release-7.rpm || true
+sudo yum -y -q install yum-utils
+sudo subscription-manager repos --enable=rhel-7-server-optional-rpms || true
+sudo yum-config-manager -y -q --disable remi-php54 || true
+sudo yum-config-manager -y -q --enable remi-php73 || true
+sudo yum -y -q install php73 php73-php php73-php-cli
+sudo ln -s /usr/bin/php73 /usr/bin/php || true
+sudo ln -s /usr/bin/php73-cgi /usr/bin/php-cgi || true
+
+echo "-----"
+jq --version; echo "-----"
+python --version; echo "-----"
+go version; echo "-----"
+echo -n "node "; node --version; echo "-----"
+echo -n "npm "; npm --version; echo "-----"
+php --version; echo "-----"
 
 # bootstrapping: if keytab is lost, upload to 
 # https://codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/credentials/store/system/domain/_/
@@ -66,26 +87,30 @@ kinit "crw-build/codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com@RE
 klist # verify working
 
 # generate source files
-cd ${WORKSPACE}/crw/product/manifest/ && ./get-3rd-party-deps-manifests.sh ''' + CRW_VERSION_FLAG + '''
+cd ${WORKSPACE}/crw/product/manifest/ && ./get-3rd-party-deps-manifests.sh ''' + getLatestImageTagsFlags + '''
 
-mv ${WORKSPACE}/''' + CSV_VERSION + ''' ${WORKSPACE}/crw/product/manifest/ && tree ${WORKSPACE}/crw/product/manifest/''' + CSV_VERSION + '''
+# copy over the dir contents
+rsync -azrlt ${WORKSPACE}/''' + CSV_VERSION + '''/* ${WORKSPACE}/crw/product/manifest/''' + CSV_VERSION + '''/
+# sync the directory and delete from target if deleted from source
+rsync -azrlt --delete ${WORKSPACE}/''' + CSV_VERSION + '''/ ${WORKSPACE}/crw/product/manifest/''' + CSV_VERSION + '''/
+tree ${WORKSPACE}/crw/product/manifest/''' + CSV_VERSION + '''
 
-  # commit manifest files
-  git checkout --track origin/master || true
-  export GITHUB_TOKEN=''' + GITHUB_TOKEN + ''' # echo "''' + GITHUB_TOKEN + '''"
-  git config user.email "nickboldt+devstudio-release@gmail.com"
-  git config user.name "Red Hat Devstudio Release Bot"
-  git config --global push.default matching
+# commit manifest files
+git checkout --track origin/master || true
+export GITHUB_TOKEN=''' + GITHUB_TOKEN + ''' # echo "''' + GITHUB_TOKEN + '''"
+git config user.email "nickboldt+devstudio-release@gmail.com"
+git config user.name "Red Hat Devstudio Release Bot"
+git config --global push.default matching
 
-  # SOLVED :: Fatal: Could not read Username for "https://github.com", No such device or address :: https://github.com/github/hub/issues/1644
-  git remote -v
-  git config --global hub.protocol https
-  git remote set-url origin https://\$GITHUB_TOKEN:x-oauth-basic@github.com/redhat-developer/codeready-workspaces.git
-  git remote -v
+# SOLVED :: Fatal: Could not read Username for "https://github.com", No such device or address :: https://github.com/github/hub/issues/1644
+git remote -v
+git config --global hub.protocol https
+git remote set-url origin https://\$GITHUB_TOKEN:x-oauth-basic@github.com/redhat-developer/codeready-workspaces.git
+git remote -v
 
-  git add ''' + CSV_VERSION + '''
-  git commit -s -m "[prodsec] Update product security manifests for ''' + CSV_VERSION + '''" ''' + CSV_VERSION + '''
-  git push origin master
+git add ''' + CSV_VERSION + '''
+git commit -s -m "[prodsec] Update product security manifests for ''' + CSV_VERSION + '''" ''' + CSV_VERSION + '''
+git push origin master
 
 '''
           }

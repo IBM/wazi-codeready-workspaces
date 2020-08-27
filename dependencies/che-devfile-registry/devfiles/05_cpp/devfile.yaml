@@ -19,19 +19,19 @@ components:
 -
   type: dockerimage
   alias: cpp-dev
-  image: registry.redhat.io/codeready-workspaces/stacks-cpp-rhel8:2.2
+  image: registry.redhat.io/codeready-workspaces/stacks-cpp-rhel8:2.3
   memoryLimit: 512Mi
   mountSources: true
 commands:
   -
-    name: Build current algorithm
+    name: 1. Build current algorithm
     actions:
       - type: exec
         component: cpp-dev
         command: rm -f "${fileDirname}"/bin.out && g++ -g "${file}" -o bin.out && echo "Build complete"
         workdir: '${fileDirname}'
   -
-    name: Run current algorithm
+    name: 2. Run current algorithm
     actions:
       - type: exec
         component: cpp-dev

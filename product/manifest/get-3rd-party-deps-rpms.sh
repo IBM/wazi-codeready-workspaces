@@ -3,9 +3,10 @@
 # script to generate a manifest of all the rpms installed into the containers
 
 # candidateTag="crw-2.0-rhel-8-candidate" # 2.0, 2.1
-candidateTag="crw-2.2-rhel-8-container-candidate" # 2.2
-
-getLatestImageFlag="" # placeholder for a --crw22 flag to pass to getLatestImageTags.sh
+MIDSTM_BRANCH="master"
+candidateTag="crw-2.2-rhel-8-container-candidate" # 2.3
+arches="x86_64" # TODO add s390x and ppc64le eventually
+getLatestImageTagsFlags="" # placeholder for a --crw23 flag to pass to getLatestImageTags.sh
 allNVRs=""
 MATCH=""
 quiet=0
@@ -26,7 +27,8 @@ $0 # to generate overall log for all latest NVRs
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     '-h'|'--help') echo -e "$HELP"; exit 1;;
-    '--crw'*) getLatestImageFlag="$1"; shift 1;;
+    '--crw'*) getLatestImageTagsFlags="$1"; shift 1;;
+    '-a'|'--arches') arches="$2";  shift 2;; 
     '-v')    CSV_VERSION="$2";     shift 2;;
     '-g')          MATCH="$2";     shift 2;;
     '-q')          quiet=1;        shift 1;;
@@ -34,11 +36,12 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 
-# compute version from latest operator package.yaml, eg., 2.2.0
+# compute version from latest operator package.yaml, eg., 2.3.0
 # TODO when we switch to OCP 4.6 bundle format, extract this version from another place
 if [[ ! ${CSV_VERSION} ]]; then 
-  CSV_VERSION=$(curl -sSLo - https://raw.githubusercontent.com/redhat-developer/codeready-workspaces-operator/master/controller-manifests/codeready-workspaces.package.yaml | yq .channels[0].currentCSV -r | sed -r -e "s#crwoperator.v##")
+  CSV_VERSION=$(curl -sSLo - https://raw.githubusercontent.com/redhat-developer/codeready-workspaces-operator/${MIDSTM_BRANCH}/controller-manifests/codeready-workspaces.package.yaml | yq .channels[0].currentCSV -r | sed -r -e "s#crwoperator.v##")
 fi
+CRW_VERSION=$(echo $CSV_VERSION | sed -r -e "s#([0-9]+\.[0-9]+)[^0-9]+.+#\1#") # trim the x.y part from the x.y.z
 
 cd /tmp
 mkdir -p ${WORKSPACE}/${CSV_VERSION}/rpms
@@ -62,18 +65,19 @@ function bth () {
 
 function loadNVRs() {
 	pushd /tmp >/dev/null
-	curl -sSLO https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/product/getLatestImageTags.sh
+	curl -sSLO https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/${MIDSTM_BRANCH}/product/getLatestImageTags.sh
 	chmod +x getLatestImageTags.sh
-	mnf "Latest image list ${getLatestImageFlag}"
-	/tmp/getLatestImageTags.sh ${getLatestImageFlag} --nvr | tee /tmp/getLatestImageTags.sh.nvrs.txt
+	mnf "Latest image list ${getLatestImageTagsFlags}"
+	/tmp/getLatestImageTags.sh ${getLatestImageTagsFlags} --nvr | tee /tmp/getLatestImageTags.sh.nvrs.txt
 	loadNVRs_return="$(cat /tmp/getLatestImageTags.sh.nvrs.txt)"
 	popd >/dev/null
 }
 
 function loadNVRlog() {
-	NVR=$1
-	MANIFEST_FILE2=$2
-	URL=$(echo $NVR | sed -e "s#\(.\+\(-container\|-rhel8\)\)-\([0-9.]\+\)-\([0-9.]\+\)#http://download.eng.bos.redhat.com/brewroot/packages/\1/\3/\4/data/logs/x86_64-build.log#")
+	NVR="$1"
+	MANIFEST_FILE2="$2"
+	ARCH="$3"
+	URL=$(echo $NVR | sed -e "s#\(.\+\(-container\|-rhel8\)\)-\([0-9.]\+\)-\([0-9.]\+\)#http://download.eng.bos.redhat.com/brewroot/packages/\1/\3/\4/data/logs/${ARCH}-build.log#")
 	# log ""
 	log "   ${URL}"
 
@@ -120,7 +124,9 @@ log "Brew logs:"
 for NVR in ${allNVRs}; do
 	MANIFEST_FILE2="${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms-${NVR}.txt"
 	rm -fr ${MANIFEST_FILE2}
-	loadNVRlog $NVR ${MANIFEST_FILE2}
+	for arch in ${arches}; do
+		loadNVRlog $NVR ${MANIFEST_FILE2} ${arch}
+	done
 done
 
 if [[ $quiet -eq 0 ]]; then
@@ -135,7 +141,7 @@ fi
 ##################################
 
 # get uniq list of RPMs
-cat ${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms-codeready-workspaces-* | sed -r -e "s#.+:2.1-[0-9]+/# #g" | sort | uniq > ${MANIFEST_UNIQ_FILE}
+cat ${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms-codeready-workspaces-* | sed -r -e "s#.+:${CRW_VERSION}-[0-9.]+/# #g" | sort | uniq > ${MANIFEST_UNIQ_FILE}
 
 ##################################
 
@@ -152,7 +158,5 @@ for NVR in ${allNVRs}; do
 	fi
 done
 echo "" | tee -a ${LOG_FILE}
-
-cat ${WORKSPACE}/${CSV_VERSION}/rpms/manifest-rpms-codeready-workspaces-* | sed -r -e "s#.+:2.1-[0-9]+/# #g" | sort | uniq > ${MANIFEST_UNIQ_FILE}
 
 ##################################

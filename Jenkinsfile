@@ -1,15 +1,18 @@
 #!/usr/bin/env groovy
 
 // PARAMETERS for this pipeline:
-// node == slave label, eg., rhel7-devstudio-releng-16gb-ram||rhel7-16gb-ram||rhel7-devstudio-releng||rhel7 or rhel7-32gb||rhel7-16gb||rhel7-8gb
-// nodeBig == slave label, eg., rhel7-devstudio-releng-16gb-ram||rhel7-16gb-ram or rhel7-32gb||rhel7-16gb
-// branchToBuildDev = refs/tags/20
-// branchToBuildParent = refs/tags/7.9.3
-// branchToBuildChe = refs/tags/7.9.3 or */*/7.9.x or */master
-// branchToBuildCRW = */7.9.x or */master
+// node == node label, eg., rhel7-devstudio-releng-16gb-ram||rhel7-16gb-ram||rhel7-devstudio-releng||rhel7 or rhel7-32gb||rhel7-16gb||rhel7-8gb
+// nodeBig == node label, eg., rhel7-devstudio-releng-16gb-ram||rhel7-16gb-ram or rhel7-32gb||rhel7-16gb
+// branchToBuildDev = refs/tags/19
+// branchToBuildParent = refs/tags/7.15.0
+// branchToBuildChe = refs/tags/7.16.x
+// branchToBuildCRW = master
 // BUILDINFO = ${JOB_NAME}/${BUILD_NUMBER}
 // MVN_EXTRA_FLAGS = extra flags, such as to disable a module -pl '!org.eclipse.che.selenium:che-selenium-test'
 // SCRATCH = true (don't push to Quay) or false (do push to Quay)
+
+def DWNSTM_REPO = "containers/codeready-workspaces" // dist-git repo to use as target for everything
+def DWNSTM_BRANCH = "crw-2.2-rhel-8" // target branch in dist-git repo, eg., crw-2.2-rhel-8
 
 def installNPM(){
 	def yarnVersion="1.21.0"
@@ -30,8 +33,9 @@ def installGo(){
 def MVN_FLAGS="-Dmaven.repo.local=.repository/ -V -B -e"
 
 def buildMaven(){
-	def mvnHome = tool 'maven-3.5.4'
-	env.PATH="${env.PATH}:${mvnHome}/bin"
+	def mvnHome = tool 'maven-3.6.2'
+	env.PATH="/qa/tools/opt/x86_64/openjdk11_last/bin:${env.PATH}:${mvnHome}/bin"
+	sh "mvn -v"
 }
 
 def CRW_SHAs = ""
@@ -62,7 +66,9 @@ def SHA_CRW = "SHA_CRW"
 
 timeout(240) {
 	node("${node}"){ stage "Build ${DEV_path}, ${PAR_path}, ${CHE_DB_path}, ${CHE_WL_path}, and ${CRW_path}"
-	  wrap([$class: 'TimestamperBuildWrapper']) {
+		wrap([$class: 'TimestamperBuildWrapper']) {
+		    withCredentials([string(credentialsId:'devstudio-release.token', variable: 'GITHUB_TOKEN'), 
+		    	file(credentialsId: 'crw-build.keytab', variable: 'CRW_KEYTAB')]) {
 		cleanWs()
 		buildMaven()
 		installNPM()
@@ -110,7 +116,7 @@ timeout(240) {
 					[$class: 'DisableRemotePoll']
 				],
 				submoduleCfg: [], 
-				userRemoteConfigs: [[refspec: "+refs/pull/${env.ghprbPullId}/head:refs/remotes/origin/PR-${env.ghprbPullId}", url: "https://github.com/redhat-developer/${CRW_path}.git"]]])
+				userRemoteConfigs: [[refspec: "+refs/pull/${env.ghprbPullId}/head:refs/remotes/origin/PR-${env.ghprbPullId}", url: "https://github.com/redhat-developer/codeready-workspaces.git"]]])
 		} else {
 			checkout([$class: 'GitSCM', 
 				branches: [[name: "${branchToBuildCRW}"]], 
@@ -121,7 +127,7 @@ timeout(240) {
 					[$class: 'PathRestriction', excludedRegions: 'dependencies/**'],
 				],
 				submoduleCfg: [], 
-				userRemoteConfigs: [[url: "https://github.com/redhat-developer/${CRW_path}.git"]]])
+				userRemoteConfigs: [[url: "https://github.com/redhat-developer/codeready-workspaces.git"]]])
 		}
 		VER_CRW = sh(returnStdout:true,script:"egrep \"<version>\" ${CRW_path}/pom.xml|head -2|tail -1|sed -e \"s#.*<version>\\(.\\+\\)</version>#\\1#\"").trim()
 		SHA_CRW = sh(returnStdout:true,script:"cd ${CRW_path}/ && git rev-parse --short=4 HEAD").trim()
@@ -190,9 +196,6 @@ timeout(240) {
 
 		echo "<===== Build che-dashboard ====="
 
-		// TODO collect assets from dashboard like this?
-		//docker run --rm --entrypoint sh che-dashboard:next -c 'tar -pzcf - /usr/local/apache2/htdocs/dashboard ' > asset-che-dashboard.tar.gz
-
 		echo "===== Build che-workspace-loader =====>"
 		checkout([$class: 'GitSCM', 
 			branches: [[name: "${branchToBuildChe}"]], 
@@ -232,6 +235,175 @@ timeout(240) {
 
 		// unpack asset-*.tgz into folder where mvn can access it
 		// use that content when building assembly main and ws assembly?
+
+		def SYNC_FILES_UP2DWN = "entrypoint.sh" // in che/dockerfiles/che/ folder
+
+		sh '''#!/bin/bash -xe
+		cd ''' + CRW_path + '''
+
+		# bootstrapping: if keytab is lost, upload to
+		# https://codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/credentials/store/system/domain/_/
+		# then set Use secret text above and set Bindings > Variable (path to the file) as ''' + CRW_KEYTAB + '''
+		chmod 700 ''' + CRW_KEYTAB + ''' && chown ''' + USER + ''' ''' + CRW_KEYTAB + '''
+		# create .k5login file
+		echo "crw-build/codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com@REDHAT.COM" > ~/.k5login
+		chmod 644 ~/.k5login && chown ''' + USER + ''' ~/.k5login
+		echo "pkgs.devel.redhat.com,10.19.208.80 ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAplqWKs26qsoaTxvWn3DFcdbiBxqRLhFngGiMYhbudnAj4li9/VwAJqLm1M6YfjOoJrj9dlmuXhNzkSzvyoQODaRgsjCG5FaRjuN8CSM/y+glgCYsWX1HFZSnAasLDuW0ifNLPR2RBkmWx61QKq+TxFDjASBbBywtupJcCsA5ktkjLILS+1eWndPJeSUJiOtzhoN8KIigkYveHSetnxauxv1abqwQTk5PmxRgRt20kZEFSRqZOJUlcl85sZYzNC/G7mneptJtHlcNrPgImuOdus5CW+7W49Z/1xqqWI/iRjwipgEMGusPMlSzdxDX4JzIx6R53pDpAwSAQVGDz4F9eQ==
+		" >> ~/.ssh/known_hosts
+		ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+		# see https://mojo.redhat.com/docs/DOC-1071739
+		if [[ -f ~/.ssh/config ]]; then mv -f ~/.ssh/config{,.BAK}; fi
+		echo "
+		GSSAPIAuthentication yes
+		GSSAPIDelegateCredentials yes
+		Host pkgs.devel.redhat.com
+		User crw-build/codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com@REDHAT.COM
+		" > ~/.ssh/config
+		chmod 600 ~/.ssh/config
+		# initialize kerberos
+		export KRB5CCNAME=/var/tmp/crw-build_ccache
+		kinit "crw-build/codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com@REDHAT.COM" -kt ''' + CRW_KEYTAB + '''
+		klist # verify working
+
+		# REQUIRE: skopeo
+		curl -L -s -S https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/product/updateBaseImages.sh -o /tmp/updateBaseImages.sh
+		chmod +x /tmp/updateBaseImages.sh
+
+  		git checkout --track origin/''' + branchToBuildCRW + ''' || true
+  		export GITHUB_TOKEN=''' + GITHUB_TOKEN + ''' # echo "''' + GITHUB_TOKEN + '''"
+		git config user.email "nickboldt+devstudio-release@gmail.com"
+		git config user.name "Red Hat Devstudio Release Bot"
+		git config --global push.default matching
+
+		# SOLVED :: Fatal: Could not read Username for "https://github.com", No such device or address :: https://github.com/github/hub/issues/1644
+		git remote -v
+		git config --global hub.protocol https
+		git remote set-url origin https://\$GITHUB_TOKEN:x-oauth-basic@github.com/redhat-developer/''' + CRW_path + '''.git
+		git remote -v
+
+		# Check if che-machine-exec and che-theia plugins are current in upstream repo and if not, add them
+		# NOTE: we want the version of che in the pom, not the value of che computed for the dashboard (che.version override)
+		pushd dependencies/che-plugin-registry >/dev/null
+			./build/scripts/add_che_plugins.sh $(cat ${WORKSPACE}/''' + CRW_path + '''/pom.xml | grep -E "<che.version>" | sed -r -e "s#.+<che.version>(.+)</che.version>#\\1#")
+		popd >/dev/null
+
+		# fetch sources to be updated
+		DWNSTM_REPO="''' + DWNSTM_REPO + '''"
+		pushd ${WORKSPACE} >/dev/null
+		if [[ ! -d ${WORKSPACE}/targetdwn ]]; then git clone ssh://crw-build@pkgs.devel.redhat.com/${DWNSTM_REPO} targetdwn; fi
+		popd >/dev/null
+		pushd ${WORKSPACE}/targetdwn >/dev/null
+		git checkout --track origin/''' + DWNSTM_BRANCH + ''' || true
+		git config user.email crw-build@REDHAT.COM
+		git config user.name "CRW Build"
+		git config --global push.default matching
+		popd >/dev/null
+
+		# rsync files in upstream github to dist-git
+		for d in ''' + SYNC_FILES_UP2DWN + '''; do
+		if [[ -f ${WORKSPACE}/''' + CHE_path + '''/dockerfiles/che/${d} ]]; then
+			rsync -zrlt ${WORKSPACE}/''' + CHE_path + '''/dockerfiles/che/${d} ${WORKSPACE}/targetdwn/${d}
+		fi
+		done
+		# rsync files in upstream github to midstream GH
+		for d in ''' + SYNC_FILES_UP2DWN + '''; do
+		if [[ -f ${WORKSPACE}/''' + CHE_path + '''/dockerfiles/che/${d} ]]; then
+			rsync -zrlt ${WORKSPACE}/''' + CHE_path + '''/dockerfiles/che/${d} ${WORKSPACE}/''' + CRW_path + '''/${d}
+		fi
+		done
+
+		# copy rhel.Dockerfile from upstream to CRW repo
+		cp ${WORKSPACE}/''' + CHE_path + '''/dockerfiles/che/rhel.Dockerfile ${WORKSPACE}/''' + CRW_path + '''/Dockerfile
+		# transform Che version to CRW version (in both locations)
+		sed -r -i ${WORKSPACE}/''' + CRW_path + '''/Dockerfile \
+		`# transform che rhel.Dockerfile to CRW Dockerfile` \
+		-e 's@ADD eclipse-che .+@\\
+# NOTE: if built in Brew, use get-sources-jenkins.sh to pull latest\\
+COPY assembly/codeready-workspaces-assembly-main/target/codeready-workspaces-assembly-main.tar.gz /tmp/codeready-workspaces-assembly-main.tar.gz\\
+RUN tar xzf /tmp/codeready-workspaces-assembly-main.tar.gz --transform="s#.*codeready-workspaces-assembly-main/*##" -C /home/user/codeready \\&\\& rm -f /tmp/codeready-workspaces-assembly-main.tar.gz\\
+@g'
+
+		# TODO should this be a branch instead of just master?
+		CRW_VERSION=`wget -qO- https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/dependencies/VERSION`
+		# apply patches to downstream version
+		cp ${WORKSPACE}/''' + CRW_path + '''/Dockerfile ${WORKSPACE}/targetdwn/Dockerfile
+		sed -i ${WORKSPACE}/targetdwn/Dockerfile \
+		-e "s#FROM registry.redhat.io/#FROM #g" \
+		-e "s#FROM registry.access.redhat.com/#FROM #g" \
+		-e "s#COPY assembly/codeready-workspaces-assembly-main/target/#COPY #g" \
+		-e "s/# *RUN yum /RUN yum /g"
+
+METADATA='ENV SUMMARY="Red Hat CodeReady Workspaces server container" \\\r
+    DESCRIPTION="Red Hat CodeReady Workspaces server container" \\\r
+    PRODNAME="codeready-workspaces" \\\r
+    COMPNAME="server-rhel8" \r
+LABEL summary="$SUMMARY" \\\r
+      description="$DESCRIPTION" \\\r
+      io.k8s.description="$DESCRIPTION" \\\r
+      io.k8s.display-name=\"$DESCRIPTION" \\\r
+      io.openshift.tags="$PRODNAME,$COMPNAME" \\\r
+      com.redhat.component="$PRODNAME-$COMPNAME-container" \\\r
+      name="$PRODNAME/$COMPNAME" \\\r
+      version="'$CRW_VERSION'" \\\r
+      license="EPLv2" \\\r
+      maintainer="Nick Boldt <nboldt@redhat.com>" \\\r
+      io.openshift.expose-services="" \\\r
+      usage="" \r'
+echo -e "$METADATA" >> ${WORKSPACE}/targetdwn/Dockerfile
+
+# push changes in github to dist-git
+cd ${WORKSPACE}/targetdwn
+if [[ \$(git diff --name-only) ]]; then # file changed
+  OLD_SHA_DWN=\$(git rev-parse HEAD) # echo ${OLD_SHA_DWN:0:8}
+  git add Dockerfile ''' + SYNC_FILES_UP2DWN + ''' . -A -f
+  /tmp/updateBaseImages.sh -b ''' + DWNSTM_BRANCH + ''' --nocommit || true
+  # note this might fail if we sync from a tag vs. a branch
+  git commit -s -m "[sync] Update from ''' + CHE_path + ''' @ ''' + SHA_CHE + ''' + ''' + CRW_path + ''' @ ''' + SHA_CRW + '''" \
+    Dockerfile ''' + SYNC_FILES_UP2DWN + ''' . || true
+  git push origin ''' + DWNSTM_BRANCH + ''' || true
+  NEW_SHA_DWN=\$(git rev-parse HEAD) # echo ${NEW_SHA_DWN:0:8}
+  if [[ "${OLD_SHA_DWN}" != "${NEW_SHA_DWN}" ]]; then hasChanged=1; fi
+  echo "[sync] Updated pkgs.devel @ ${NEW_SHA_DWN:0:8} from ''' + CHE_path + ''' @ ''' + SHA_CHE + ''' + ''' + CRW_path + ''' @ ''' + SHA_CRW + '''"
+else
+    # file not changed, but check if base image needs an update
+    # (this avoids having 2 commits for every change)
+    OLD_SHA_DWN=\$(git rev-parse HEAD) # echo ${OLD_SHA_DWN:0:8}
+    /tmp/updateBaseImages.sh -b ''' + DWNSTM_BRANCH + ''' || true
+    NEW_SHA_DWN=\$(git rev-parse HEAD) # echo ${NEW_SHA_DWN:0:8}
+    if [[ "${OLD_SHA_DWN}" != "${NEW_SHA_DWN}" ]]; then hasChanged=1; fi
+fi
+
+# push changes to github
+cd ${WORKSPACE}/''' + CRW_path + '''
+if [[ \$(git diff --name-only) ]]; then # file changed
+    OLD_SHA_MID=\$(git rev-parse HEAD) # echo ${OLD_SHA_MID:0:8}
+    git add Dockerfile ''' + SYNC_FILES_UP2DWN + ''' . -A -f
+    /tmp/updateBaseImages.sh -b ''' + branchToBuildCRW + ''' --nocommit || true
+    # note this might fail if we sync from a tag vs. a branch
+    git commit -s -m "[sync] Update from ''' + CHE_path + ''' @ ''' + SHA_CHE + '''" \
+	  Dockerfile ''' + SYNC_FILES_UP2DWN + ''' . || true
+    git push origin ''' + branchToBuildCRW + ''' || true
+    NEW_SHA_MID=\$(git rev-parse HEAD) # echo ${NEW_SHA_MID:0:8}
+    if [[ "${OLD_SHA_MID}" != "${NEW_SHA_MID}" ]]; then hasChanged=1; fi
+    echo "[sync] Updated GH @ ${NEW_SHA_MID:0:8} from ''' + CHE_path + ''' @ ''' + SHA_CHE + '''"
+else
+    # file not changed, but check if base image needs an update
+    # (this avoids having 2 commits for every change)
+    OLD_SHA_MID=\$(git rev-parse HEAD) # echo ${OLD_SHA_MID:0:8}
+    /tmp/updateBaseImages.sh -b ''' + branchToBuildCRW + ''' || true
+    NEW_SHA_MID=\$(git rev-parse HEAD) # echo ${NEW_SHA_MID:0:8}
+    if [[ "${OLD_SHA_MID}" != "${NEW_SHA_MID}" ]]; then hasChanged=1; fi
+fi
+cd ..
+
+if [[ ''' + FORCE_BUILD + ''' == "true" ]]; then hasChanged=1; fi
+if [[ ${hasChanged} -eq 1 ]]; then
+	touch ${WORKSPACE}/trigger-downstream-true
+fi
+if [[ ${hasChanged} -eq 0 ]]; then
+  echo "No changes upstream, nothing to commit"
+fi
+		'''
 
 		sh "mvn clean install ${MVN_FLAGS} -f ${CRW_path}/pom.xml -Dparent.version=\"${VER_CHE}\" -Dche.version=\"${VER_CHE}\" -Dcrw.dashboard.version=\"${CRW_SHAs}\" ${MVN_EXTRA_FLAGS}"
 
@@ -288,6 +460,7 @@ timeout(240) {
  :: ${CRW_path} @ ${SHA_CRW} (${VER_CRW})"
 		echo "${descriptString}"
 		currentBuild.description="${descriptString}"
+		}
 	  }
 	}
 }
@@ -295,48 +468,46 @@ timeout(240) {
 timeout(120) {
 	node("${node}"){ stage "Run get-sources-rhpkg-container-build"
 		def QUAY_REPO_PATHs=(env.ghprbPullId && env.ghprbPullId?.trim()?"":("${SCRATCH}"=="true"?"":"server-rhel8"))
+		if (fileExists(WORKSPACE + '/trigger-downstream-true') || PUSH_TO_QUAY.equals("true")) {
+			echo "[INFO] Trigger get-sources-rhpkg-container-build " + (env.ghprbPullId && env.ghprbPullId?.trim()?"for PR-${ghprbPullId} ":"") + \
+			"with SCRATCH = ${SCRATCH}, QUAY_REPO_PATHs = ${QUAY_REPO_PATHs}, JOB_BRANCH = ${branchToBuildCRW}"
 
-		def matcher = ( "${JOB_NAME}" =~ /.*_(stable-branch|master).*/ )
-		def JOB_BRANCH = (matcher.matches() ? matcher[0][1] : "master")
-
-		def matcher2 = ( "${JOB_NAME}" =~ /.*(_PR).*/ )
-		def PR_SUFFIX = (matcher2.matches() ? matcher2[0][1] : "")
-
-		echo "[INFO] Trigger get-sources-rhpkg-container-build " + (env.ghprbPullId && env.ghprbPullId?.trim()?"for PR-${ghprbPullId} ":"") + \
-		"with SCRATCH = ${SCRATCH}, QUAY_REPO_PATHs = ${QUAY_REPO_PATHs}, JOB_BRANCH = ${JOB_BRANCH}${PR_SUFFIX}"
-
-		// trigger OSBS build
-		build(
-		  job: 'get-sources-rhpkg-container-build',
-		  wait: false,
-		  propagate: false,
-		  parameters: [
-			[
-			  $class: 'StringParameterValue',
-			  name: 'GIT_PATHs',
-			  value: "containers/codeready-workspaces",
-			],
-			[
-			  $class: 'StringParameterValue',
-			  name: 'GIT_BRANCH',
-			  value: "crw-2.2-rhel-8",
-			],
-			[
-			  $class: 'StringParameterValue',
-			  name: 'QUAY_REPO_PATHs',
-			  value: "${QUAY_REPO_PATHs}",
-			],
-			[
-			  $class: 'StringParameterValue',
-			  name: 'SCRATCH',
-			  value: "${SCRATCH}",
-			],
-			[
-			  $class: 'StringParameterValue',
-			  name: 'JOB_BRANCH',
-			  value: "${JOB_BRANCH}${PR_SUFFIX}",
+			// trigger OSBS build
+			build(
+			job: 'get-sources-rhpkg-container-build',
+			wait: false,
+			propagate: false,
+			parameters: [
+				[
+				$class: 'StringParameterValue',
+				name: 'GIT_PATHs',
+				value: "containers/codeready-workspaces",
+				],
+				[
+				$class: 'StringParameterValue',
+				name: 'GIT_BRANCH',
+				value: "crw-2.2-rhel-8",
+				],
+				[
+				$class: 'StringParameterValue',
+				name: 'QUAY_REPO_PATHs',
+				value: "${QUAY_REPO_PATHs}",
+				],
+				[
+				$class: 'StringParameterValue',
+				name: 'SCRATCH',
+				value: "${SCRATCH}",
+				],
+				[
+				$class: 'StringParameterValue',
+				name: 'JOB_BRANCH',
+				value: "${branchToBuildCRW}",
+				]
 			]
-		  ]
-		)
+			)
+		} else {
+			echo "No changes upstream, Brew build not triggered"
+			currentBuild.result='UNSTABLE'
+		}
 	}
 }
