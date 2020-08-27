@@ -18,12 +18,12 @@ components:
   -
     type: dockerimage
     alias: python
-    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.2
+    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.3
     memoryLimit: 512Mi
     mountSources: true
 commands:
   -
-    name: run
+    name: 1. Run
     actions:
       -
         type: exec
