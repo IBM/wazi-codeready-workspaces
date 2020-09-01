@@ -26,6 +26,10 @@ components:
   id: ibm/wazi-development-client/1.1.0
   alias: wazi-development-client
 -
+  type: chePlugin
+  id: ibm/wazi-debug/1.1.0
+  alias: wazi-debug
+-
   type: dockerimage
   alias: wazi
   image: docker.io/ibmcom/wazi-code-codeready:latest
