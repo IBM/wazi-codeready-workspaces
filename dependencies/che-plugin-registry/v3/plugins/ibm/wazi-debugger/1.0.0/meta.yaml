@@ -18,5 +18,5 @@ category: Language
 firstPublicationDate: "2020-08-31"
 spec:
   extensions:
-  - http://rtpgsa.ibm.com/projects/w/wazi/current/latest/zopendebug.vsix
-  - http://rtpgsa.ibm.com/projects/w/wazi/current/latest/zopendebug-profileui.vsix
+  - relative:extension/plugins/ibm/wazi-debugger/1.0.0/extensions/zopendebug.vsix
+  - relative:extension/plugins/ibm/wazi-debugger/1.0.0/extensions/zopendebug-profileui.vsix
