@@ -7,7 +7,7 @@
 apiVersion: v2
 publisher: ibm
 name: wazi-debugger
-version: 1.0.0
+version: 1.1.0
 type: VS Code extension
 displayName: IBM Wazi Debugger Tools
 title: IBM Wazi Debugger Tools
@@ -18,5 +18,5 @@ category: Language
 firstPublicationDate: "2020-08-31"
 spec:
   extensions:
-  - relative:extension/plugins/ibm/wazi-debugger/1.0.0/extensions/zopendebug.vsix
-  - relative:extension/plugins/ibm/wazi-debugger/1.0.0/extensions/zopendebug-profileui.vsix
+  - relative:extension/plugins/ibm/wazi-debugger/1.1.0/extensions/zopendebug.vsix
+  - relative:extension/plugins/ibm/wazi-debugger/1.1.0/extensions/zopendebug-profileui.vsix
