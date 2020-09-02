@@ -12,7 +12,7 @@ type: VS Code extension
 displayName: IBM Z Open Debug
 title: IBM Z Open Debug
 description: This VS Code extension provides support for IBM Z debugging, based on the IBM Z Open Debug extensions.
-icon: https://www.eclipse.org/che/images/logo-eclipseche.svg
+icon: https://raw.githubusercontent.com/IBM/zopendebug-about/master/images/ibm-z-open-debug.svg
 repository: https://github.com/IBM/zopendebug-about.git
 category: Language
 firstPublicationDate: "2020-08-31"
