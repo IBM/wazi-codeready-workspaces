@@ -30,6 +30,10 @@ components:
   id: ibm/wazi-debug/1.1.0
   alias: wazi-debug
 -
+  type: chePlugin
+  id: redhat/vscode-yaml/0.8.0
+  alias: vscode-yaml
+-
   type: dockerimage
   alias: wazi
   image: docker.io/ibmcom/wazi-code-codeready:latest
