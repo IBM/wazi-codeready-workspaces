@@ -12,7 +12,7 @@
 
 apiVersion: v2
 publisher: ibm
-name: wazi-development-client
+name: wazi-developer
 version: 1.0.0
 type: VS Code extension
 displayName: IBM Wazi Development Client
