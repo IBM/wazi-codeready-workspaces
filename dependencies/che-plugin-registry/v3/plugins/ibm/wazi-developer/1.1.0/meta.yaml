@@ -12,16 +12,16 @@
 
 apiVersion: v2
 publisher: ibm
-name: wazi-development-client
+name: wazi-developer
 version: 1.1.0
 type: VS Code extension
-displayName: IBM Wazi Development Client
-title: IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, Zowe CLI 6.3, Zowe Explorer 1.6, IBM User Build 1.0
+displayName: Wazi Developer
+title: IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, Zowe CLI 6.21, Zowe Explorer 1.9, IBM User Build 1.1
 description: Provides COBOL, PL/I, HLASM language servers and tools for IBM Z development.
-icon: https://raw.githubusercontent.com/IBM/zopeneditor-about/master/che/images/ibm-wazi-development-client.svg
+icon: https://raw.githubusercontent.com/IBM/zopeneditor-about/master/che/images/ibm-wazi-developer.svg
 repository: https://github.com/IBM/zopeneditor-about.git
 category: Language
-firstPublicationDate: "2020-07-29"
+firstPublicationDate: "2020-10-30"
 spec:
   containers:
   - image: docker.io/ibmcom/wazi-code-codeready:latest
@@ -37,6 +37,6 @@ spec:
     - mountPath: "/home/wazi/.m2"
       name: m2
   extensions:
-  - relative:extension/plugins/ibm/wazi-development-client/1.1.0/extensions/wazi-vscode-extension-for-zowe.vsix
-  - relative:extension/plugins/ibm/wazi-development-client/1.1.0/extensions/zopeneditor.vsix
-  - relative:extension/plugins/ibm/wazi-development-client/1.1.0/extensions/userbuild.vsix
+  - relative:extension/plugins/ibm/wazi-developer/1.1.0/extensions/wazi-vscode-extension-for-zowe.vsix
+  - relative:extension/plugins/ibm/wazi-developer/1.1.0/extensions/zopeneditor.vsix
+  - relative:extension/plugins/ibm/wazi-developer/1.1.0/extensions/userbuild.vsix

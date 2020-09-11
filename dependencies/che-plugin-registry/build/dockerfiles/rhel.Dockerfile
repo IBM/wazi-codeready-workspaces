@@ -80,19 +80,25 @@ RUN chmod -R g+rwX /build
 # https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/rhscl/httpd-24-rhel7
 FROM registry.access.redhat.com/rhscl/httpd-24-rhel7:2.4-119 AS registry
 
-ENV PRODUCT="IBM Wazi for CodeReady Workspaces Development Client" \
+ENV PRODUCT="IBM Wazi Developer for Red Hat CodeReady Workspaces" \
     COMPANY="IBM" \
     VERSION="1.1.0" \
     RELEASE="1" \
-    SUMMARY="IBM Wazi for CodeReady Workspaces Development Client - Plugin" \
-    DESCRIPTION="IBM Wazi for CodeReady Workspaces Development Client - Plugin Registry"
+    SUMMARY="IBM Wazi Developer for Workspaces" \
+    DESCRIPTION="IBM Wazi Developer for Red Hat CodeReady Workspaces - Plugin" \
+    PRODTAG="wazi-code-plugin"
 
-LABEL name="$COMPANY-$PRODUCT" \
+LABEL name="$PRODUCT" \
       vendor="$COMPANY" \
       version="$VERSION" \
       release="$RELEASE" \
       summary="$SUMMARY" \
-      description="$DESCRIPTION"
+      description="$DESCRIPTION" \
+      io.k8s.description="$DESCRIPTION" \
+      io.k8s.display-name="$SUMMARY" \
+      io.openshift.tags="$PRODTAG,$COMPANY" \
+      com.redhat.component="$PRODTAG" \
+      io.openshift.expose-services=""
       
 # DOWNSTREAM: use RHEL8/httpd
 # https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/rhel8/httpd-24
