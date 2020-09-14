@@ -19,7 +19,6 @@ before_install:
   - curl https://public.dhe.ibm.com/ibmdl/export/pub/software/htp/zos/tools/wazi/wazi-development-client-1.0.0-20200624.zip | jar xv
   - mv Zowe.vscode-extension-for-zowe-1.6.0.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-developer/${CURRENT_VERSION}/extensions/wazi-vscode-extension-for-zowe.vsix
   - mv zopeneditor-1.0.1.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-developer/${CURRENT_VERSION}/extensions/zopeneditor.vsix
-  - mv userbuild-1.0.0.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-developer/${CURRENT_VERSION}/extensions/userbuild.vsix
   - mv zopendebug-1.0.0.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-debug/${CURRENT_VERSION}/extensions/zopendebug.vsix
   - mv zopendebug-profileui-1.0.0.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-debug/${CURRENT_VERSION}/extensions/zopendebug-profileui.vsix
 install: 
