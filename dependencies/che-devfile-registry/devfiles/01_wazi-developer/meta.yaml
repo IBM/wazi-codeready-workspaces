@@ -11,7 +11,7 @@
 #
 
 displayName: Wazi Developer
-description: IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, Zowe CLI 6.21, Zowe Explorer 1.9, IBM Z Open Debug 1.1
+description: IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, Zowe CLI 6.2, Zowe Explorer 1.9, IBM Z Open Debug 1.1
 tags: ["COBOL", "PL/I", "PLI", "PL1", "HLASM", "JCL", "IDE", "LSP", "language-server", "z/OS", "zOS", "IBM Z", "Z Software", "Zowe", "Mainframe", "Debug"]
 icon: /images/app-icon-light-.svg
 globalMemoryLimit: 3000Mi
