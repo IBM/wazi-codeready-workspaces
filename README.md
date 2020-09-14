@@ -18,7 +18,6 @@ IBM Wazi Developer for Workspaces provides a custom stack for mainframe develope
 - Intelligent build capability that enables developers to perform a user build with IBM Dependency Based Build for any flavor of Git
 - Integrations that enable developers to work with z/OS resources such as MVS and UNIX files and JES jobs
 - Connectivity to Z host using [Zowe Explorer](https://marketplace.visualstudio.com/items?itemName=Zowe.vscode-extension-for-zowe)
-- Running user builds using [IBM Z User Build](https://www.ibm.com/support/knowledgecenter/SSCH39_1.0.0/com.ibm.wazi.development.client.doc/user_build_setup_run.html)
 - Debugging COBOL and PL/I applications using [IBM Z Open Debug](https://developer.ibm.com/mainframe/2020/06/12/introducing-ibm-z-open-debug/)
 - Interacting with the [IBM Remote System Explorer API](https://ibm.github.io/zopeneditor-about/Docs/interact_zos_overview.html)
 - Mainframe Development package with custom plugin and devfile registry support using the [IBM Wazi Developer stack](https://github.com/IBM/wazi-codeready-workspaces)
