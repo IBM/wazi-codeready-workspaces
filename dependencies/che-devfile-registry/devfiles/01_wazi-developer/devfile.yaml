@@ -23,8 +23,8 @@ projects:
 components:
 -
   type: chePlugin
-  id: ibm/wazi-development-client/1.1.0
-  alias: wazi-development-client
+  id: ibm/wazi-developer/1.1.0
+  alias: wazi-developer
 -
   type: chePlugin
   id: ibm/wazi-debug/1.1.0
