@@ -111,7 +111,7 @@ USER 0
 # latest httpd container doesn't include ssl cert, so generate one
 RUN chmod +x /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh && \
     /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh
-RUN yum update -y gnutls systemd dbus && yum clean all && rm -rf /var/cache/yum && \
+RUN yum update -y gnutls systemd dbus libssh2 glibc nss expat libcom_err libcroco curl python cpio openldap libxml2 libxslt glib2 && yum clean all && rm -rf /var/cache/yum && \
     echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages"
 # Fix for htaccess from VA Scan
 RUN echo "<FilesMatch "\""^\\.ht"\"">" >> /etc/httpd/conf/httpd.conf && \
