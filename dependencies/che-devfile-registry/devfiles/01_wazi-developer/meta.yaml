@@ -1,5 +1,5 @@
 #
-# Copyright IBM Corporation 2020
+# Copyright IBM Corporation 2020-2021
 # This program and the accompanying materials are made
 # available under the terms of the Eclipse Public License 2.0
 # which is available at https://www.eclipse.org/legal/epl-2.0/
@@ -11,7 +11,7 @@
 #
 
 displayName: Wazi Developer
-description: IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, Zowe CLI 6.2, Zowe Explorer 1.9, IBM Z Open Debug 1.1
+description: IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, Zowe CLI 6.23, Zowe Explorer 1.9, IBM Z Open Debug 1.2
 tags: ["COBOL", "PL/I", "PLI", "PL1", "HLASM", "JCL", "IDE", "LSP", "language-server", "z/OS", "zOS", "IBM Z", "Z Software", "Zowe", "Mainframe", "Debug"]
-icon: /images/app-icon-light-.svg
+icon: /images/type-wazi.svg
 globalMemoryLimit: 3000Mi

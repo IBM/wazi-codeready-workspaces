@@ -1,5 +1,5 @@
 #
-# Copyright IBM Corporation 2020
+# Copyright IBM Corporation 2020-2021
 # This program and the accompanying materials are made
 # available under the terms of the Eclipse Public License 2.0
 # which is available at https://www.eclipse.org/legal/epl-2.0/
@@ -21,17 +21,17 @@ projects:
       branch: wazi-master
 components:
 - type: chePlugin
-  id: ibm/wazi-developer/1.1.0
+  id: ibm/wazi-developer/1.2.0
   alias: wazi-developer
 - type: chePlugin
-  id: ibm/wazi-debug/1.1.0
+  id: ibm/wazi-debug/1.2.0
   alias: wazi-debug
 - type: chePlugin
-  id: redhat/vscode-yaml/0.8.0
+  id: redhat/vscode-yaml/0.11.1
   alias: vscode-yaml
 - type: dockerimage
   alias: wazi
-  image: docker.io/ibmcom/wazi-code-codeready:latest
+  image: docker.io/ibmcom/wazi-code-codeready:1.2.0
   memoryLimit: 512Mi
   volumes:
     - name: wazi

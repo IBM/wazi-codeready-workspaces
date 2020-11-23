@@ -1,18 +1,22 @@
 #!/usr/bin/env groovy
 
+import groovy.transform.Field
+
 // PARAMETERS for this pipeline:
-// node == node label, eg., rhel7-devstudio-releng-16gb-ram||rhel7-16gb-ram||rhel7-devstudio-releng||rhel7 or rhel7-32gb||rhel7-16gb||rhel7-8gb
-// nodeBig == node label, eg., rhel7-devstudio-releng-16gb-ram||rhel7-16gb-ram or rhel7-32gb||rhel7-16gb
-// branchToBuildDev = refs/tags/19
-// branchToBuildParent = refs/tags/7.15.0
-// branchToBuildChe = refs/tags/7.16.x
-// branchToBuildCRW = master
 // BUILDINFO = ${JOB_NAME}/${BUILD_NUMBER}
-// MVN_EXTRA_FLAGS = extra flags, such as to disable a module -pl '!org.eclipse.che.selenium:che-selenium-test'
 // SCRATCH = true (don't push to Quay) or false (do push to Quay)
+// FORCE_BUILD = "false"
+
+@Field String branchToBuildDev = "refs/tags/19"
+@Field String branchToBuildParent = "refs/tags/7.15.0"
+@Field String branchToBuildChe = "7.20.x"
+@Field String MIDSTM_BRANCH = "crw-2.5-rhel-8" // target branch in GH repo, eg., crw-2.5-rhel-8
+
+@Field String PUSH_TO_QUAY = "true"
+@Field String MVN_EXTRA_FLAGS = "" // additional flags for maven (currently not used), eg., to disable a module -pl '!org.eclipse.che.selenium:che-selenium-test'
 
 def DWNSTM_REPO = "containers/codeready-workspaces" // dist-git repo to use as target for everything
-def DWNSTM_BRANCH = "crw-2.2-rhel-8" // target branch in dist-git repo, eg., crw-2.2-rhel-8
+def DWNSTM_BRANCH = MIDSTM_BRANCH // target branch in dist-git repo, eg., crw-2.5-rhel-8
 
 def installNPM(){
 	def yarnVersion="1.21.0"
@@ -30,9 +34,45 @@ def installGo(){
 	sh "go version"
 }
 
+def installYq(){
+		sh '''#!/bin/bash -xe
+sudo yum -y install jq python3-six python3-pip
+sudo /usr/bin/python3 -m pip install --upgrade pip yq; jq --version; yq --version
+'''
+}
+
+@Field String CRW_VERSION_F = ""
+def String getCrwVersion(String MIDSTM_BRANCH) {
+  if (CRW_VERSION_F.equals("")) {
+    CRW_VERSION_F = sh(script: '''#!/bin/bash -xe
+    curl -sSLo- https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/''' + MIDSTM_BRANCH + '''/dependencies/VERSION''', returnStdout: true).trim()
+  }
+  return CRW_VERSION_F
+}
+
+def installSkopeo(String CRW_VERSION)
+{
+sh '''#!/bin/bash -xe
+pushd /tmp >/dev/null
+# remove any older versions
+sudo yum remove -y skopeo || true
+# install from @kcrane build
+if [[ ! -x /usr/local/bin/skopeo ]]; then
+    sudo curl -sSLO "https://codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/job/crw-deprecated_''' + CRW_VERSION + '''/lastSuccessfulBuild/artifact/codeready-workspaces-deprecated/skopeo/target/skopeo-$(uname -m).tar.gz"
+fi
+if [[ -f /tmp/skopeo-$(uname -m).tar.gz ]]; then 
+    sudo tar xzf /tmp/skopeo-$(uname -m).tar.gz --overwrite -C /usr/local/bin/
+    sudo chmod 755 /usr/local/bin/skopeo
+    sudo rm -f /tmp/skopeo-$(uname -m).tar.gz
+fi
+popd >/dev/null
+skopeo --version
+'''
+}
+
 def MVN_FLAGS="-Dmaven.repo.local=.repository/ -V -B -e"
 
-def buildMaven(){
+def installMaven(){
 	def mvnHome = tool 'maven-3.6.2'
 	env.PATH="/qa/tools/opt/x86_64/openjdk11_last/bin:${env.PATH}:${mvnHome}/bin"
 	sh "mvn -v"
@@ -58,6 +98,7 @@ def SHA_CHE_WL = "SHA_CHE_WL"
 
 def CHE_path = "che"
 def VER_CHE = "VER_CHE"
+def VER_CHE_PREV = "VER_CHE_PREV"
 def SHA_CHE = "SHA_CHE"
 
 def CRW_path = "codeready-workspaces"
@@ -65,14 +106,18 @@ def VER_CRW = "VER_CRW"
 def SHA_CRW = "SHA_CRW"
 
 timeout(240) {
-	node("${node}"){ stage "Build ${DEV_path}, ${PAR_path}, ${CHE_DB_path}, ${CHE_WL_path}, and ${CRW_path}"
+	node("rhel7-32gb||rhel7-16gb||rhel7-8gb"){ stage "Build ${DEV_path}, ${PAR_path}, ${CHE_DB_path}, ${CHE_WL_path}, and ${CRW_path}"
 		wrap([$class: 'TimestamperBuildWrapper']) {
 		    withCredentials([string(credentialsId:'devstudio-release.token', variable: 'GITHUB_TOKEN'), 
 		    	file(credentialsId: 'crw-build.keytab', variable: 'CRW_KEYTAB')]) {
 		cleanWs()
-		buildMaven()
+		installMaven()
 		installNPM()
 		installGo()
+		installYq()
+		CRW_VERSION = getCrwVersion(DWNSTM_BRANCH)
+		println "CRW_VERSION = '" + CRW_VERSION + "'"
+		installSkopeo(CRW_VERSION)
 
 		echo "===== Build che-dev =====>"
 		checkout([$class: 'GitSCM', 
@@ -119,7 +164,7 @@ timeout(240) {
 				userRemoteConfigs: [[refspec: "+refs/pull/${env.ghprbPullId}/head:refs/remotes/origin/PR-${env.ghprbPullId}", url: "https://github.com/redhat-developer/codeready-workspaces.git"]]])
 		} else {
 			checkout([$class: 'GitSCM', 
-				branches: [[name: "${branchToBuildCRW}"]], 
+				branches: [[name: "${MIDSTM_BRANCH}"]], 
 				doGenerateSubmoduleConfigurations: false, 
 				poll: true,
 				extensions: [
@@ -142,7 +187,16 @@ timeout(240) {
 			submoduleCfg: [], 
 			userRemoteConfigs: [[url: "https://github.com/eclipse/${CHE_path}.git"]]])
 
-		VER_CHE = sh(returnStdout:true,script:"egrep \"<version>\" ${CHE_path}/pom.xml|head -2|tail -1|sed -e \"s#.*<version>\\(.\\+\\)</version>#\\1#\"").trim()
+		VER_CHE = sh(returnStdout:true,script:'''#!/bin/bash -xe
+egrep "<version>" ''' + CHE_path + '''/pom.xml|head -2|tail -1|sed -r -e "s#.*<version>(.+)</version>#\\1#"
+''').trim()
+		// for VERSION=7.18.3, get BASE=7.18, PREV=2 so VER_CHE_PREV=7.18.2
+		VER_CHE_PREV = sh(returnStdout:true,script:'''#!/bin/bash -xe
+VERSION=$(egrep "<version>" ''' + CHE_path + '''/pom.xml|head -2|tail -1| sed -r -e "s#.*<version>(.+)-SNAPSHOT</version>#\\1#")
+[[ $VERSION =~ ^([0-9]+)\\.([0-9]+)\\.([0-9]+) ]] && BASE="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"; PREV="${BASH_REMATCH[3]}"; let PREV=PREV-1 || PREV=0;
+PREVVERSION="${BASE}.${PREV}"; echo ${PREVVERSION}
+''').trim()
+
 		SHA_CHE = sh(returnStdout:true,script:"cd ${CHE_path}/ && git rev-parse --short=4 HEAD").trim()
 		echo "<==== Get Che version ====="
 
@@ -155,7 +209,7 @@ timeout(240) {
 			submoduleCfg: [], 
 			userRemoteConfigs: [[url: "https://github.com/eclipse/${CHE_DB_path}.git"]]])
 
-		VER_CHE_DB = sh(returnStdout:true,script:"egrep \"<version>\" ${CHE_DB_path}/pom.xml|head -2|tail -1|sed -e \"s#.*<version>\\(.\\+\\)</version>#\\1#\"").trim()
+		VER_CHE_DB = sh(returnStdout:true,script:"cat ${CHE_DB_path}/package.json | jq -r .version").trim()
 		SHA_CHE_DB = sh(returnStdout:true,script:"cd ${CHE_DB_path}/ && git rev-parse --short=4 HEAD").trim()
 
 		// set correct version of CRW Dashboard
@@ -206,6 +260,7 @@ timeout(240) {
 			userRemoteConfigs: [[url: "https://github.com/eclipse/${CHE_WL_path}.git"]]])
 
 		VER_CHE_WL = sh(returnStdout:true,script:"egrep \"<version>\" ${CHE_WL_path}/pom.xml|head -2|tail -1|sed -e \"s#.*<version>\\(.\\+\\)</version>#\\1#\"").trim()
+		// future way to get version: sh(returnStdout:true,script:"cat ${CHE_WL_path}/package.json | jq -r .version").trim()
 		SHA_CHE_WL = sh(returnStdout:true,script:"cd ${CHE_WL_path}/ && git rev-parse --short=4 HEAD").trim()
 		
 		sh '''#!/bin/bash -xe
@@ -231,7 +286,7 @@ timeout(240) {
 		echo "CRW_SHAs (overall) = ${CRW_SHAs}"
 
 		// TODO does crw.dashboard.version still work here? Or should we do this higher up? 
-		// NOTE: VER_CHE could be 7.12.2-SNAPSHOT if we're using a .x branch instead of a tag. So this overrides what's in the crw root pom.xml
+		// NOTE: VER_CHE could be 7.17.2-SNAPSHOT if we're using a .x branch instead of a tag. So this overrides what's in the crw root pom.xml
 
 		// unpack asset-*.tgz into folder where mvn can access it
 		// use that content when building assembly main and ws assembly?
@@ -266,10 +321,10 @@ timeout(240) {
 		klist # verify working
 
 		# REQUIRE: skopeo
-		curl -L -s -S https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/product/updateBaseImages.sh -o /tmp/updateBaseImages.sh
+		curl -L -s -S https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/''' + MIDSTM_BRANCH + '''/product/updateBaseImages.sh -o /tmp/updateBaseImages.sh
 		chmod +x /tmp/updateBaseImages.sh
 
-  		git checkout --track origin/''' + branchToBuildCRW + ''' || true
+  		git checkout --track origin/''' + MIDSTM_BRANCH + ''' || true
   		export GITHUB_TOKEN=''' + GITHUB_TOKEN + ''' # echo "''' + GITHUB_TOKEN + '''"
 		git config user.email "nickboldt+devstudio-release@gmail.com"
 		git config user.name "Red Hat Devstudio Release Bot"
@@ -281,10 +336,12 @@ timeout(240) {
 		git remote set-url origin https://\$GITHUB_TOKEN:x-oauth-basic@github.com/redhat-developer/''' + CRW_path + '''.git
 		git remote -v
 
+		# CRW-1213 update the che.version in the pom, so we have the latest from the upstream branch
+		sed -i pom.xml -r -e "s#<che.version>.+</che.version>#<che.version>''' + VER_CHE_PREV + '''</che.version>#g"
+
 		# Check if che-machine-exec and che-theia plugins are current in upstream repo and if not, add them
-		# NOTE: we want the version of che in the pom, not the value of che computed for the dashboard (che.version override)
 		pushd dependencies/che-plugin-registry >/dev/null
-			./build/scripts/add_che_plugins.sh $(cat ${WORKSPACE}/''' + CRW_path + '''/pom.xml | grep -E "<che.version>" | sed -r -e "s#.+<che.version>(.+)</che.version>#\\1#")
+			./build/scripts/add_che_plugins.sh -b ''' + MIDSTM_BRANCH + ''' ''' + VER_CHE_PREV + '''
 		popd >/dev/null
 
 		# fetch sources to be updated
@@ -321,10 +378,13 @@ timeout(240) {
 # NOTE: if built in Brew, use get-sources-jenkins.sh to pull latest\\
 COPY assembly/codeready-workspaces-assembly-main/target/codeready-workspaces-assembly-main.tar.gz /tmp/codeready-workspaces-assembly-main.tar.gz\\
 RUN tar xzf /tmp/codeready-workspaces-assembly-main.tar.gz --transform="s#.*codeready-workspaces-assembly-main/*##" -C /home/user/codeready \\&\\& rm -f /tmp/codeready-workspaces-assembly-main.tar.gz\\
-@g'
-
-		# TODO should this be a branch instead of just master?
-		CRW_VERSION=`wget -qO- https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/dependencies/VERSION`
+@g' \
+		-e 's@chmod g\\+w /home/user/cacerts@chmod 777 /home/user/cacerts@g'
+		# CRW-1189 applying the fix in midstream entrypoint.sh
+		sed -i ${WORKSPACE}/''' + CRW_path + '''/entrypoint.sh \
+		-e '/chmod 644 \\$JAVA_TRUST_STORE || true/d' \
+		-e 's/chmod 444 \\$JAVA_TRUST_STORE/chmod 444 \\$JAVA_TRUST_STORE || true/g'
+		CRW_VERSION="''' + CRW_VERSION_F + '''"
 		# apply patches to downstream version
 		cp ${WORKSPACE}/''' + CRW_path + '''/Dockerfile ${WORKSPACE}/targetdwn/Dockerfile
 		sed -i ${WORKSPACE}/targetdwn/Dockerfile \
@@ -332,6 +392,11 @@ RUN tar xzf /tmp/codeready-workspaces-assembly-main.tar.gz --transform="s#.*code
 		-e "s#FROM registry.access.redhat.com/#FROM #g" \
 		-e "s#COPY assembly/codeready-workspaces-assembly-main/target/#COPY #g" \
 		-e "s/# *RUN yum /RUN yum /g"
+
+		# CRW-1189 applying fix to downstream entrypoint.sh
+		sed -i ${WORKSPACE}/targetdwn/entrypoint.sh \
+		-e '/chmod 644 \\$JAVA_TRUST_STORE || true/d' \
+		-e 's/chmod 444 \\$JAVA_TRUST_STORE/chmod 444 \\$JAVA_TRUST_STORE || true/g'
 
 METADATA='ENV SUMMARY="Red Hat CodeReady Workspaces server container" \\\r
     DESCRIPTION="Red Hat CodeReady Workspaces server container" \\\r
@@ -378,11 +443,11 @@ cd ${WORKSPACE}/''' + CRW_path + '''
 if [[ \$(git diff --name-only) ]]; then # file changed
     OLD_SHA_MID=\$(git rev-parse HEAD) # echo ${OLD_SHA_MID:0:8}
     git add Dockerfile ''' + SYNC_FILES_UP2DWN + ''' . -A -f
-    /tmp/updateBaseImages.sh -b ''' + branchToBuildCRW + ''' --nocommit || true
+    /tmp/updateBaseImages.sh -b ''' + MIDSTM_BRANCH + ''' --nocommit || true
     # note this might fail if we sync from a tag vs. a branch
     git commit -s -m "[sync] Update from ''' + CHE_path + ''' @ ''' + SHA_CHE + '''" \
 	  Dockerfile ''' + SYNC_FILES_UP2DWN + ''' . || true
-    git push origin ''' + branchToBuildCRW + ''' || true
+    git push origin ''' + MIDSTM_BRANCH + ''' || true
     NEW_SHA_MID=\$(git rev-parse HEAD) # echo ${NEW_SHA_MID:0:8}
     if [[ "${OLD_SHA_MID}" != "${NEW_SHA_MID}" ]]; then hasChanged=1; fi
     echo "[sync] Updated GH @ ${NEW_SHA_MID:0:8} from ''' + CHE_path + ''' @ ''' + SHA_CHE + '''"
@@ -390,7 +455,7 @@ else
     # file not changed, but check if base image needs an update
     # (this avoids having 2 commits for every change)
     OLD_SHA_MID=\$(git rev-parse HEAD) # echo ${OLD_SHA_MID:0:8}
-    /tmp/updateBaseImages.sh -b ''' + branchToBuildCRW + ''' || true
+    /tmp/updateBaseImages.sh -b ''' + MIDSTM_BRANCH + ''' || true
     NEW_SHA_MID=\$(git rev-parse HEAD) # echo ${NEW_SHA_MID:0:8}
     if [[ "${OLD_SHA_MID}" != "${NEW_SHA_MID}" ]]; then hasChanged=1; fi
 fi
@@ -466,11 +531,11 @@ fi
 }
 
 timeout(120) {
-	node("${node}"){ stage "Run get-sources-rhpkg-container-build"
+	node("rhel7-releng"){ stage "Run get-sources-rhpkg-container-build"
 		def QUAY_REPO_PATHs=(env.ghprbPullId && env.ghprbPullId?.trim()?"":("${SCRATCH}"=="true"?"":"server-rhel8"))
 		if (fileExists(WORKSPACE + '/trigger-downstream-true') || PUSH_TO_QUAY.equals("true")) {
 			echo "[INFO] Trigger get-sources-rhpkg-container-build " + (env.ghprbPullId && env.ghprbPullId?.trim()?"for PR-${ghprbPullId} ":"") + \
-			"with SCRATCH = ${SCRATCH}, QUAY_REPO_PATHs = ${QUAY_REPO_PATHs}, JOB_BRANCH = ${branchToBuildCRW}"
+			"with SCRATCH = ${SCRATCH}, QUAY_REPO_PATHs = ${QUAY_REPO_PATHs}, JOB_BRANCH = ${MIDSTM_BRANCH}"
 
 			// trigger OSBS build
 			build(
@@ -486,7 +551,7 @@ timeout(120) {
 				[
 				$class: 'StringParameterValue',
 				name: 'GIT_BRANCH',
-				value: "crw-2.2-rhel-8",
+				value: "${DWNSTM_BRANCH}",
 				],
 				[
 				$class: 'StringParameterValue',
@@ -501,7 +566,7 @@ timeout(120) {
 				[
 				$class: 'StringParameterValue',
 				name: 'JOB_BRANCH',
-				value: "${branchToBuildCRW}",
+				value: "${CRW_VERSION_F}",
 				]
 			]
 			)
