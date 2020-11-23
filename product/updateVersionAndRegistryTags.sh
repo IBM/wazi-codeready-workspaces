@@ -10,10 +10,11 @@ PR_BRANCH="pr-update-version-and-registry-tags-$(date +%s)"
 OPENBROWSERFLAG="" # if a PR is generated, open it in a browser
 docommit=1 # by default DO commit the change
 dopush=1 # by default DO push the change
+WORKDIR="$(pwd)"
 
 usage () {
-	echo "Usage:   $0 -b [BRANCH] -t [CRW TAG VERSION] [-w WORKDIR]"
-	echo "Example: $0 -b crw-2.4-rhel-8 -t 2.4 -w $(pwd)"
+	echo "Usage:   $0 -b [BRANCH] -v [CRW CSV VERSION] -t [CRW TAG VERSION] [-w WORKDIR]"
+	echo "Example: $0 -b crw-2.5-rhel-8 -v 2.5.0 -t 2.5 -w $(pwd)"
 	echo "Options: 
 	--no-commit, -n    do not commit to BRANCH
 	--no-push, -p      do not push to BRANCH
@@ -29,7 +30,8 @@ while [[ "$#" -gt 0 ]]; do
   case $1 in
     '-w') WORKDIR="$2"; shift 1;;
     '-b') BRANCH="$2"; shift 1;;
-    '-t') CRW_VERSION="$2"; shift 1;;
+    '-v') CSV_VERSION="$2"; shift 1;; # 2.5.0
+    '-t') CRW_VERSION="$2"; shift 1;; # 2.5
     '-n'|'--no-commit') docommit=0; dopush=0; shift 0;;
     '-p'|'--no-push') dopush=0; shift 0;;
     '-prb') PR_BRANCH="$2"; shift 1;;
@@ -40,38 +42,62 @@ while [[ "$#" -gt 0 ]]; do
   shift 1
 done
 
+if [[ ! ${CRW_VERSION} ]]; then
+  CRW_VERSION=${CSV_VERSION%.*} # given 2.5.0, want 2.5
+fi
+
+# update VERSION file to product version (x.y)
 updateVersion() {
     echo "${CRW_VERSION}" > ${WORKDIR}/dependencies/VERSION
+}
+
+# update poms to latest CSV version (x.y.z.GA)
+updatePomVersion () {
+    pushd ${WORKDIR} >/dev/null || exit
+    echo "Running 'mvn versions:set' with version = ${CSV_VERSION}.GA"
+    mvn versions:set -DgenerateBackupPoms=false -DnewVersion=${CSV_VERSION}.GA -q
+    git diff -q || true
+    popd >/dev/null || exit
 }
 
 updateDevfileRegistry() {
     SCRIPT_DIR="${WORKDIR}/dependencies/che-devfile-registry/build/scripts"
     YAML_ROOT="${WORKDIR}/dependencies/che-devfile-registry/devfiles"
 
-    readarray -d '' devfiles < <("$SCRIPT_DIR"/list_yaml.sh "$YAML_ROOT" | tr '\n' '\0')
     # replace CRW devfiles with image references to current version tag
-    sed -E -i "s|(.*image: *?.*registry.redhat.io/codeready-workspaces/.*:).+|\1${CRW_VERSION}|g" ${devfiles[@]}
+    for devfile in $("$SCRIPT_DIR"/list_yaml.sh "$YAML_ROOT"); do
+       sed -E -e "s|(.*image: *?.*registry.redhat.io/codeready-workspaces/.*:).+|\1${CRW_VERSION}|g" \
+           -i "${devfile}"
+    done
+    git diff -q ${YAML_ROOT} || true
 }
 
 updatePluginRegistry() {
     SCRIPT_DIR="${WORKDIR}/dependencies/che-plugin-registry/build/scripts"
     YAML_ROOT="${WORKDIR}/dependencies/che-plugin-registry/v3/plugins"
 
-    readarray -d '' plugins < <("$SCRIPT_DIR"/list_yaml.sh "$YAML_ROOT" | tr '\n' '\0')
     declare -a latestPlugins
-    for plugin in ${plugins[@]}
-    do
+    for plugin in $("$SCRIPT_DIR"/list_yaml.sh "$YAML_ROOT"); do
         #select only latest plugins
         var1=${plugin%/*}
         var2=${var1%/*}
         latestVersion=$(cat "$var2/latest.txt")
         latestPlugin="$var2/$latestVersion/meta.yaml" 
-        if [ "$plugin" == "$latestPlugin" ];then
+        if [[ "$plugin" == "$latestPlugin" ]]; then
             latestPlugins+=($plugin)
         fi
+        # also update next and nightly templates
+        for nn in "$var2/next/meta.yaml" "$var2/nightly/meta.yaml"; do
+            if [[ -f $nn ]]; then latestPlugins+=($nn); fi
+        done
     done        
     # replace latest CRW plugins with current version tag
-    sed -E -i "s|(.*image: *?.*registry.redhat.io/codeready-workspaces/.*:).+|\1${CRW_VERSION}\"|g" ${latestPlugins[@]}
+    for latestPlugin in "${latestPlugins[@]}"; do
+        sed -E -e "s|(.*image: \"registry.redhat.io/codeready-workspaces/.*:).+\"|\1${CRW_VERSION}\"|g" \
+            -e "s|(.*image: registry.redhat.io/codeready-workspaces/.*:).+|\1${CRW_VERSION}|g" \
+            -i "${latestPlugin}"
+    done
+    git diff -q ${YAML_ROOT} || true
 }
 
 commitChanges() {
@@ -82,7 +108,7 @@ commitChanges() {
             PUSH_TRY="$(git push origin "${BRANCH}" 2>&1 || git push origin "${PR_BRANCH}" || true)"
             # shellcheck disable=SC2181
             if [[ $? -gt 0 ]] || [[ $PUSH_TRY == *"protected branch hook declined"* ]]; then
-                # create pull request for master branch, as branch is restricted
+                # if cannot push directly, create pull request for ${BRANCH}
                 git branch "${PR_BRANCH}" || true
                 git checkout "${PR_BRANCH}" || true
                 git pull origin "${PR_BRANCH}" || true
@@ -92,7 +118,7 @@ commitChanges() {
                     # collect additional commits in the same PR if it already exists 
                     { hub pull-request -f -m "${lastCommitComment}
 
-${lastCommitComment}" -b "${BRANCH}" -h "${PR_BRANCH}" "${OPENBROWSERFLAG}"; } || { git merge master; git push origin "${PR_BRANCH}"; }
+${lastCommitComment}" -b "${BRANCH}" -h "${PR_BRANCH}" "${OPENBROWSERFLAG}"; } || { git merge ${BRANCH}; git push origin "${PR_BRANCH}"; }
                 else
                     echo "# Warning: hub is required to generate pull requests. See https://hub.github.com/ to install it."
                     echo -n "# To manually create a pull request, go here: "
@@ -108,6 +134,7 @@ if [[ -z ${CRW_VERSION} ]]; then
     exit 1
 fi
 
+updatePomVersion
 updateVersion
 updatePluginRegistry
 updateDevfileRegistry
