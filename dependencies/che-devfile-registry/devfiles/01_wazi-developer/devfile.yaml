@@ -38,4 +38,6 @@ components:
       containerPath: /home/wazi/.zowe
     - name: m2
       containerPath: /home/wazi/.m2
+    - name: debug
+      containerPath: /home/wazi/.debug
   mountSources: true
