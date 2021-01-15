@@ -77,7 +77,7 @@ FROM registry.access.redhat.com/rhscl/httpd-24-rhel7:2.4-119 AS registry
 
 ENV PRODUCT="IBM Wazi Developer for Red Hat CodeReady Workspaces" \
     COMPANY="IBM" \
-    VERSION="1.1.0" \
+    VERSION="1.2.0" \
     RELEASE="1" \
     SUMMARY="IBM Wazi Developer for Workspaces" \
     DESCRIPTION="IBM Wazi Developer for Red Hat CodeReady Workspaces - Devfile" \
