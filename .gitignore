@@ -1,5 +1,4 @@
 .Dockerfile
-
 # Eclipse  #
 ###################
 
@@ -7,7 +6,6 @@
 .classpath
 .project
 .settings/
-.mvn/
 target/
 bin/
 test-output/

@@ -24,7 +24,7 @@ components:
   id: ibm/wazi-developer/1.2.0
   alias: wazi-developer
 - type: chePlugin
-  id: ibm/wazi-debug/1.2.0
+  id: ibm/wazi-debug/1.1.1
   alias: wazi-debug
 - type: chePlugin
   id: redhat/vscode-yaml/0.11.1
