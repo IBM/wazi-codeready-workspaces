@@ -31,7 +31,7 @@ components:
   alias: vscode-yaml
 - type: dockerimage
   alias: wazi
-  image: docker.io/ibmcom/wazi-code-codeready@sha256:1cd617e78761bfeb6cbb5c6a57945c789af5aafbc1a186fe1fd55de387ffebb6
+  image: stg.icr.io/ibm/wazi-code/wazi-code-codeready@sha256:1cd617e78761bfeb6cbb5c6a57945c789af5aafbc1a186fe1fd55de387ffebb6
   memoryLimit: 512Mi
   volumes:
     - name: wazi
