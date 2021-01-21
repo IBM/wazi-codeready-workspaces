@@ -1,5 +1,5 @@
 #
-# Copyright IBM Corporation 2021
+# Copyright IBM Corporation 2020
 # This program and the accompanying materials are made
 # available under the terms of the Eclipse Public License 2.0
 # which is available at https://www.eclipse.org/legal/epl-2.0/
@@ -13,15 +13,15 @@
 apiVersion: v2
 publisher: ibm
 name: wazi-developer
-version: 1.2.0
+version: 1.1.0
 type: VS Code extension
 displayName: Wazi Developer
-title: IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, Zowe CLI 6.25, Zowe Explorer 1.11
+title: IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, Zowe CLI 6.2, Zowe Explorer 1.9
 description: Provides COBOL, PL/I, HLASM language servers and tools for IBM Z development.
 icon: https://raw.githubusercontent.com/IBM/zopeneditor-about/master/che/images/ibm-wazi-developer.svg
 repository: https://github.com/IBM/zopeneditor-about.git
 category: Language
-firstPublicationDate: "2021-03-19"
+firstPublicationDate: "2020-10-30"
 spec:
   containers:
   - image: docker.io/ibmcom/wazi-code-codeready@sha256:fde1b1dc4117058f6e7d6f05876fb398c1f8b0b3291eea8c67134f6ea2688d26
@@ -36,8 +36,6 @@ spec:
       name: wazi
     - mountPath: "/home/wazi/.m2"
       name: m2
-    - mountPath: "/home/wazi/.debug"
-      name: debug
   extensions:
-  - relative:extension/plugins/ibm/wazi-developer/1.2.0/extensions/wazi-vscode-extension-for-zowe.vsix
-  - relative:extension/plugins/ibm/wazi-developer/1.2.0/extensions/zopeneditor.vsix
+  - relative:extension/plugins/ibm/wazi-developer/1.1.0/extensions/wazi-vscode-extension-for-zowe.vsix
+  - relative:extension/plugins/ibm/wazi-developer/1.1.0/extensions/zopeneditor.vsix

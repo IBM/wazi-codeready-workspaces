@@ -13,7 +13,7 @@
 apiVersion: v2
 publisher: ibm
 name: wazi-debug
-version: 1.1.1
+version: 1.1.0
 type: VS Code extension
 displayName: IBM Z Open Debug
 title: IBM Z Open Debug
@@ -21,8 +21,8 @@ description: This VS Code extension provides support for IBM Z debugging, based 
 icon: https://raw.githubusercontent.com/IBM/zopendebug-about/master/images/ibm-z-open-debug.svg
 repository: https://github.com/IBM/zopendebug-about.git
 category: Language
-firstPublicationDate: "2021-03-19"
+firstPublicationDate: "2020-10-30"
 spec:
   extensions:
-  - relative:extension/plugins/ibm/wazi-debug/1.1.1/extensions/zopendebug.vsix
-  - relative:extension/plugins/ibm/wazi-debug/1.1.1/extensions/zopendebug-profileui.vsix
+  - relative:extension/plugins/ibm/wazi-debug/1.1.0/extensions/zopendebug.vsix
+  - relative:extension/plugins/ibm/wazi-debug/1.1.0/extensions/zopendebug-profileui.vsix
