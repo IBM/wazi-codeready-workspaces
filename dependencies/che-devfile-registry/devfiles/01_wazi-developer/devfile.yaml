@@ -23,6 +23,8 @@ components:
 - type: chePlugin
   id: ibm/wazi-developer/latest
   alias: wazi-developer
+  preferences:
+    Zowe-Temp-Folder-Location: '{"folderPath": "/projects"}'
 - type: chePlugin
   id: ibm/wazi-debug/latest
   alias: wazi-debug
