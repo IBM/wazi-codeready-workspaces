@@ -116,11 +116,9 @@ USER 0
 RUN chmod +x /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh && \
     /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh
 RUN \
-    yum -y -q update && \
+    yum -y -q update gnutls systemd dbus libssh2 glibc nss expat libcom_err libcroco curl python cpio openldap libxml2 libxslt glib2 openssl bind-libs && \
     yum -y -q clean all && rm -rf /var/cache/yum && \
-    yum update -y openssl bind && \
     echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages"
-
 # Fix for htaccess from VA Scan
 RUN echo "<FilesMatch "\""^\\.ht"\"">" >> /etc/httpd/conf/httpd.conf && \
     echo "Require all denied" >> /etc/httpd/conf/httpd.conf && \
