@@ -24,7 +24,7 @@ category: Language
 firstPublicationDate: "2021-03-19"
 spec:
   containers:
-  - image: docker.io/ibmcom/wazi-code-codeready@sha256:1048c7a31df5280582439a62b9ffd37693ea388a4267dd0be5dcc63bac7ab280
+  - image: docker.io/ibmcom/wazi-code-codeready@sha256:4bbaebd29665459597b1907403666403a61fa8666de13ef1d06255b1370391fc
     name: ibm-wazi
     memoryLimit: "3000Mi"
     args:
