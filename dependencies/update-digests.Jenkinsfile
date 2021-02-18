@@ -1,46 +1,8 @@
 #!/usr/bin/env groovy
 
-import groovy.transform.Field
-
-// PARAMETERS for this pipeline: (none)
-
-@Field String MIDSTM_BRANCH = "crw-2.5-rhel-8"
-
-@Field String CRW_VERSION_F = ""
-def String getCrwVersion(String MIDSTM_BRANCH) {
-  if (CRW_VERSION_F.equals("")) {
-    CRW_VERSION_F = sh(script: '''#!/bin/bash -xe
-    curl -sSLo- https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/''' + MIDSTM_BRANCH + '''/dependencies/VERSION''', returnStdout: true).trim()
-  }
-  return CRW_VERSION_F
-}
-
-def installSkopeo(String CRW_VERSION)
-{
-sh '''#!/bin/bash -xe
-pushd /tmp >/dev/null
-# remove any older versions
-sudo yum remove -y skopeo || true
-# install from @kcrane build
-if [[ ! -x /usr/local/bin/skopeo ]]; then
-    sudo curl -sSLO "https://codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/job/crw-deprecated_''' + CRW_VERSION + '''/lastSuccessfulBuild/artifact/codeready-workspaces-deprecated/skopeo/target/skopeo-$(uname -m).tar.gz"
-fi
-if [[ -f /tmp/skopeo-$(uname -m).tar.gz ]]; then 
-    sudo tar xzf /tmp/skopeo-$(uname -m).tar.gz --overwrite -C /usr/local/bin/
-    sudo chmod 755 /usr/local/bin/skopeo
-    sudo rm -f /tmp/skopeo-$(uname -m).tar.gz
-fi
-popd >/dev/null
-skopeo --version
-'''
-}
-
-def installYq(){
-	sh '''#!/bin/bash -xe
-sudo yum -y install jq python3-six python3-pip
-sudo /usr/bin/python3 -m pip install --upgrade pip yq; jq --version; yq --version
-'''
-}
+// PARAMETERS for this pipeline:
+// SOURCE_BRANCH = "master"
+// getLatestImageTagsFlags="--crw23" # placeholder for flag to pass to getLatestImageTags.sh
 
 def errorOccurred = false
 timeout(120) {
@@ -48,14 +10,11 @@ timeout(120) {
         try { 
             stage "Check registries"
             cleanWs()
-            installYq()
-            CRW_VERSION = getCrwVersion(MIDSTM_BRANCH)
-            println "CRW_VERSION = '" + CRW_VERSION + "'"
-            installSkopeo(CRW_VERSION)
+            
             withCredentials([string(credentialsId:'devstudio-release.token', variable: 'GITHUB_TOKEN'), 
                 file(credentialsId: 'crw-build.keytab', variable: 'CRW_KEYTAB')]) {
                 checkout([$class: 'GitSCM', 
-                        branches: [[name: "${MIDSTM_BRANCH}"]], 
+                        branches: [[name: "${SOURCE_BRANCH}"]], 
                         doGenerateSubmoduleConfigurations: false, 
                         poll: true,
                         extensions: [
@@ -65,12 +24,10 @@ timeout(120) {
                         ],
                         submoduleCfg: [], 
                         userRemoteConfigs: [[url: "https://github.com/redhat-developer/codeready-workspaces.git"]]])
-
-
+                        
                 def NEW_IMAGES = sh (
-                    script: '''#!/bin/bash -xe
-                    cd ${WORKSPACE}/crw/product && ./getLatestImageTags.sh -b ''' + MIDSTM_BRANCH + ''' --quay | \
-                        tee ${WORKSPACE}/crw/dependencies/LATEST_IMAGES.new''',
+                    script: 'cd ${WORKSPACE}/crw/product && ./getLatestImageTags.sh ${getLatestImageTagsFlags} --quay | sort | uniq | grep quay | \
+                        tee ${WORKSPACE}/crw/dependencies/LATEST_IMAGES.new',
                     returnStdout: true
                 ).trim().split()
 
@@ -127,7 +84,7 @@ timeout(120) {
 
                 // define what to do when we are ready to push changes
                 def COMMITCHANGES = '''#!/bin/bash -xe
-                    cd ${WORKSPACE}/crw/product && ./getLatestImageTags.sh -b ''' + MIDSTM_BRANCH + ''' --quay > ${WORKSPACE}/crw/dependencies/LATEST_IMAGES.new
+                    cd ${WORKSPACE}/crw/product && ./getLatestImageTags.sh ${getLatestImageTagsFlags} --quay | sort | uniq | grep quay > ${WORKSPACE}/crw/dependencies/LATEST_IMAGES.new
 
                     echo "============ LATEST_IMAGES.new 3 ============>"
                     cat ${WORKSPACE}/crw/dependencies/LATEST_IMAGES.new
@@ -142,7 +99,7 @@ timeout(120) {
                     ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
                     cd ${WORKSPACE}/crw/
-                    git checkout --track origin/''' + MIDSTM_BRANCH + ''' || true
+                    git checkout --track origin/''' + SOURCE_BRANCH + ''' || true
                     git config user.email "nickboldt+devstudio-release@gmail.com"
                     git config user.name "Red Hat Devstudio Release Bot"
                     git config --global push.default matching
@@ -152,8 +109,8 @@ timeout(120) {
                     git remote set-url origin https://\$GITHUB_TOKEN:x-oauth-basic@github.com/redhat-developer/codeready-workspaces.git
                     git remote -v
 
-                    # replace LATEST_IMAGES with new values
-                    cat dependencies/LATEST_IMAGES.new > dependencies/LATEST_IMAGES
+                    # replace LATES_IMAGES with new sorted/uniqd values
+                    cat dependencies/LATEST_IMAGES.new | sort | uniq | grep quay > dependencies/LATEST_IMAGES
                     rm -f dependencies/LATEST_IMAGES.new
 
                     # generate list of NVRs, builds, and commit SHAs
@@ -163,8 +120,8 @@ timeout(120) {
                     # commit changes
                     git add dependencies/LATEST_IMAGES dependencies/LATEST_IMAGES_COMMITS || true
                     git commit -m "[update] Update dependencies/LATEST_IMAGES" dependencies/LATEST_IMAGES dependencies/LATEST_IMAGES_COMMITS
-                    git pull origin ''' + MIDSTM_BRANCH + ''' || true
-                    git push origin ''' + MIDSTM_BRANCH + '''
+                    git pull origin ''' + SOURCE_BRANCH + ''' || true
+                    git push origin ''' + SOURCE_BRANCH + '''
                 '''
 
                 def buildDescription="Running..."
@@ -192,25 +149,17 @@ timeout(120) {
                         echo currentBuild.description
                         echo DIFF_LATEST_IMAGES_WITH_REGISTRY
                         
-                        parallel devfileregistry: {
-                            build(
-                                job: 'crw-devfileregistry_' + CRW_VERSION, 
-                                wait: true, propagate: true,
-                                parameters: [[$class: 'BooleanParameterValue', name: 'FORCE_BUILD', value: true]]
-                            )
-                        }, pluginregistry: {
-                            build(
-                                job: 'crw-pluginregistry_' + CRW_VERSION, 
-                                wait: true, propagate: true,
-                                parameters: [[$class: 'BooleanParameterValue', name: 'FORCE_BUILD', value: true]]
-                            )
+                        parallel firstBranch: {
+                            build job: 'crw-devfileregistry_sync-github-to-pkgs.devel-pipeline', parameters: [[$class: 'BooleanParameterValue', name: 'FORCE_BUILD', value: true]]
+                        }, secondBranch: {
+                            build job: 'crw-pluginregistry_sync-github-to-pkgs.devel-pipeline', parameters: [[$class: 'BooleanParameterValue', name: 'FORCE_BUILD', value: true]]
                         }
                         //jobs.add(devRegJob)
                         //jobs.add(pluRegJob)
                         //parallel jobs
                         while (true) {
                             def REBUILT_IMAGES = sh (
-                            script: 'cd ${WORKSPACE}/crw/product && ./getLatestImageTags.sh -c "crw/devfileregistry-rhel8 crw/pluginregistry-rhel8" --quay',
+                            script: 'cd ${WORKSPACE}/crw/product && ./getLatestImageTags.sh -c "crw/devfileregistry-rhel8 crw/pluginregistry-rhel8" --quay | sort | uniq | grep quay',
                             returnStdout: true
                             ).trim().split()
                             def rebuiltImagesSet = REBUILT_IMAGES as Set
@@ -235,17 +184,17 @@ timeout(120) {
                         echo currentBuild.description
                         echo DIFF_LATEST_IMAGES_WITH_REGISTRY
                     }
-
                     build(
-                        job: 'crw-operator-metadata_' + CRW_VERSION,
-                        wait: true, propagate: true,
-                        parameters: [[$class: 'BooleanParameterValue', name: 'FORCE_BUILD', value: true]]
+                    job: 'crw-operator-metadata_sync-github-to-pkgs.devel-pipeline',
+                    wait: true,
+                    propagate: true,
+                    parameters: [[$class: 'BooleanParameterValue', name: 'FORCE_BUILD', value: true]]
                     )
 
                     while (true) 
                     {
                         def rebuiltOperatorMetadataImage = sh (
-                        script: 'cd ${WORKSPACE}/crw/product && ./getLatestImageTags.sh -c "crw/crw-2-rhel8-operator-metadata" --quay',
+                        script: 'cd ${WORKSPACE}/crw/product && ./getLatestImageTags.sh -c "crw/crw-2-rhel8-operator-metadata" --quay | sort | uniq | grep quay',
                         returnStdout: true
                         ).trim()
                         echo "${rebuiltOperatorMetadataImage}"

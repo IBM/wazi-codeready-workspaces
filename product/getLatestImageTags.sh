@@ -9,11 +9,7 @@
 #
 
 # script to query latest tags for a given list of imags in RHCC
-# REQUIRES: 
-#    * brew for OSBS queries, 
-#    * skopeo >=1.1 (for authenticated registry queries, and to use --override-arch for s390x images)
-#    * jq to do json queries
-#    * yq to do yaml queries (install the python3 wrapper for jq using pip)
+# requires brew for OSBS queries, skopeo (for authenticated registry queries) and jq to do json queries
 # 
 # https://registry.redhat.io is v2 and requires authentication to query, so login in first like this:
 # docker login registry.redhat.io -u=USERNAME -p=PASSWORD
@@ -24,92 +20,20 @@ if [[ ! -x /usr/bin/brew ]]; then
 	echo " * http://download.devel.redhat.com/rel-eng/RCMTOOLS/latest-RCMTOOLS-2-RHEL-7/compose/Workstation/x86_64/os/"
 fi
 
-command -v skopeo >/dev/null 2>&1 || { echo "skopeo is not installed. Aborting."; exit 1; }
-command -v jq >/dev/null 2>&1 || { echo "jq is not installed. Aborting."; exit 1; }
-command -v yq >/dev/null 2>&1 || { echo "yq is not installed. Aborting."; exit 1; }
-checkVersion() {
-  if [[  "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]]; then
-    # echo "[INFO] $3 version $2 >= $1, can proceed."
-	true
-  else 
-    echo "[ERROR] Must install $3 version >= $1"
-    exit 1
-  fi
-}
-checkVersion 1.1 "$(skopeo --version | sed -e "s/skopeo version //")" skopeo
+if [[ ! -x /usr/bin/skopeo ]]; then 
+	echo "This script requires skopeo. Please install it."
+	exit 1
+fi
 
-# should this be computed from some source?
-DWNSTM_BRANCH="crw-2.5-rhel-8"
+if [[ ! -x /usr/bin/jq ]]; then 
+	echo "This script requires jq. Please install it."
+	exit 1
+fi
 
-CRW25_CONTAINERS_RHCC="\
-codeready-workspaces/configbump-rhel8 \
-codeready-workspaces/crw-2-rhel8-operator \
-codeready-workspaces/crw-2-rhel8-operator-metadata \
-codeready-workspaces/devfileregistry-rhel8 \
-codeready-workspaces/imagepuller-rhel8 \
-\
-codeready-workspaces/jwtproxy-rhel8 \
-codeready-workspaces/machineexec-rhel8 \
-codeready-workspaces/pluginbroker-artifacts-rhel8 \
-codeready-workspaces/pluginbroker-metadata-rhel8 \
-codeready-workspaces/plugin-intellij-rhel8 \
-\
-codeready-workspaces/plugin-java11-openj9-rhel8 \
-codeready-workspaces/plugin-java11-rhel8 \
-codeready-workspaces/plugin-java8-openj9-rhel8 \
-codeready-workspaces/plugin-java8-rhel8 \
-codeready-workspaces/plugin-kubernetes-rhel8 \
-\
-codeready-workspaces/plugin-openshift-rhel8 \
-codeready-workspaces/pluginregistry-rhel8 \
-codeready-workspaces/server-rhel8 \
-codeready-workspaces/stacks-cpp-rhel8 \
-codeready-workspaces/stacks-dotnet-rhel8 \
-\
-codeready-workspaces/stacks-golang-rhel8 \
-codeready-workspaces/stacks-php-rhel8 \
-codeready-workspaces/theia-dev-rhel8 \
-codeready-workspaces/theia-endpoint-rhel8 \
-codeready-workspaces/theia-rhel8 \
-\
-codeready-workspaces/traefik-rhel8 \
-"
+candidateTag="crw-2.2-rhel-8-container-candidate"
+BASETAG=2.3 # tag to search for in quay
 
-CRW25_CONTAINERS_OSBS="\
-codeready-workspaces/configbump-rhel8 \
-codeready-workspaces/operator \
-codeready-workspaces/operator-metadata \
-codeready-workspaces/devfileregistry-rhel8 \
-codeready-workspaces/imagepuller-rhel8 \
-\
-codeready-workspaces/jwtproxy-rhel8 \
-codeready-workspaces/machineexec-rhel8 \
-codeready-workspaces/pluginbroker-artifacts-rhel8 \
-codeready-workspaces/pluginbroker-metadata-rhel8 \
-codeready-workspaces/plugin-intellij-rhel8 \
-\
-codeready-workspaces/plugin-java11-openj9-rhel8 \
-codeready-workspaces/plugin-java11-rhel8  \
-codeready-workspaces/plugin-java8-openj9-rhel8 \
-codeready-workspaces/plugin-java8-rhel8 \
-codeready-workspaces/plugin-kubernetes-rhel8 \
-\
-codeready-workspaces/plugin-openshift-rhel8 \
-codeready-workspaces/pluginregistry-rhel8 \
-codeready-workspaces/server-rhel8 \
-codeready-workspaces/stacks-cpp-rhel8 \
-codeready-workspaces/stacks-dotnet-rhel8 \
-\
-codeready-workspaces/stacks-golang-rhel8 \
-codeready-workspaces/stacks-php-rhel8 \
-codeready-workspaces/theia-dev-rhel8 \
-codeready-workspaces/theia-endpoint-rhel8 \
-codeready-workspaces/theia-rhel8 \
-\
-codeready-workspaces/traefik-rhel8 \
-"
-
-CRW24_CONTAINERS_RHCC="\
+CRW22_CONTAINERS_RHCC="\
 codeready-workspaces/crw-2-rhel8-operator-metadata \
 codeready-workspaces/devfileregistry-rhel8 \
 codeready-workspaces/pluginregistry-rhel8 \
@@ -124,15 +48,14 @@ codeready-workspaces/pluginbroker-artifacts-rhel8 \
 \
 codeready-workspaces/theia-dev-rhel8          codeready-workspaces/theia-rhel8              codeready-workspaces/theia-endpoint-rhel8 \
 \
-codeready-workspaces/plugin-java8-rhel8        codeready-workspaces/plugin-java11-rhel8 \
-codeready-workspaces/plugin-java8-openj9-rhel8 codeready-workspaces/plugin-java11-openj9-rhel8 \
-codeready-workspaces/plugin-kubernetes-rhel8   codeready-workspaces/plugin-openshift-rhel8 \
+codeready-workspaces/plugin-java8-rhel8       codeready-workspaces/plugin-java11-rhel8  \
+codeready-workspaces/plugin-kubernetes-rhel8  codeready-workspaces/plugin-openshift-rhel8 \
 \
 codeready-workspaces/stacks-cpp-rhel8         codeready-workspaces/stacks-golang-rhel8      codeready-workspaces/stacks-php-rhel8 \
 codeready-workspaces/stacks-dotnet-rhel8 \
 "
 
-CRW24_CONTAINERS_OSBS="\
+CRW22_CONTAINERS_OSBS="\
 codeready-workspaces/operator-metadata \
 codeready-workspaces/devfileregistry-rhel8 \
 codeready-workspaces/pluginregistry-rhel8 \
@@ -147,16 +70,15 @@ codeready-workspaces/pluginbroker-artifacts-rhel8 \
 \
 codeready-workspaces/theia-dev-rhel8          codeready-workspaces/theia-rhel8              codeready-workspaces/theia-endpoint-rhel8 \
 \
-codeready-workspaces/plugin-java8-rhel8        codeready-workspaces/plugin-java11-rhel8  \
-codeready-workspaces/plugin-java8-openj9-rhel8 codeready-workspaces/plugin-java11-openj9-rhel8 \
-codeready-workspaces/plugin-kubernetes-rhel8   codeready-workspaces/plugin-openshift-rhel8 \
+codeready-workspaces/plugin-java8-rhel8       codeready-workspaces/plugin-java11-rhel8  \
+codeready-workspaces/plugin-kubernetes-rhel8  codeready-workspaces/plugin-openshift-rhel8 \
 \
 codeready-workspaces/stacks-cpp-rhel8         codeready-workspaces/stacks-golang-rhel8      codeready-workspaces/stacks-php-rhel8 \
 codeready-workspaces/stacks-dotnet-rhel8 \
 "
 
 # regex pattern of container versions/names to exclude, eg., Beta1 (because version sort thinks 1.0.0.Beta1 > 1.0-12)
-EXCLUDES="latest" 
+EXCLUDES="\^" 
 
 QUIET=1 	# less output - omit container tag URLs
 VERBOSE=0	# more output
@@ -168,92 +90,79 @@ SHOWNVR=0 	# show NVR format instead of repo/container:tag format
 SHOWLOG=0 	# show URL of the console log
 PUSHTOQUAY=0 # utility method to pull then push to quay
 PUSHTOQUAYTAGS="" # utility method to pull then push to quay (extra tags to push)
-SORTED=0 # if 0, use the order of containers in the CRW*_CONTAINERS_* strings above; if 1, sort alphabetically
 usage () {
 	echo "
 Usage: 
-  $0 -b crw-2.5-rhel-8                                       | use default list of CRW images in RHCC Prod
-  $0 -b crw-2.5-rhel-8 --stage --sort                        | use default list of CRW images in RHCC Stage, sorted alphabetically
-  $0 -b crw-2.5-rhel-8 --quay --arches                       | use default list of CRW images in quay.io/crw; show arches
+  $0 --crw22, --crw23                                        | use default list of CRW images in RHCC Prod
+  $0 --crw23 --stage                                         | use default list of CRW images in RHCC Stage
+  $0 --crw23 --quay --arches                                 | use default list of CRW images in quay.io/crw; show arches
 
   $0 -c 'crw/theia-rhel8 crw/theia-endpoint-rhel8' --quay    | check a specific image in quay
   $0 -c 'rhoar-nodejs/nodejs-10 jboss-eap-7/eap72-openshift' | use specific list of RHCC images
   $0 -c ubi7 -c ubi8:8.0 --osbs -n 5                         | check OSBS registry; show 8.0* tags; show 5 tags per container
   $0 -c ubi7 -c ubi8:8.0 --stage -n 5                        | check RHCC stage registry; show 8.0* tags; show 5 tags per container
   $0 -c pivotaldata/centos --docker --dockerfile             | check docker registry; show Dockerfile contents (requires dfimage)
-  $0 -c codeready-workspaces-plugin-java11-openj9-rhel8 --quay             | check a non-amd64 image
-  $0 -c codeready-workspaces-theia-rhel8 --osbs --pushtoquay='2.5 latest'  | pull an image from osbs, push 3 tags to quay
+  $0 -c codeready-workspaces-plugin-java11-rhel8 --osbs --pushtoquay='2.3 latest' 		| pull an image from osbs, push 3 tags to quay
 
-  $0 -b crw-2.5-rhel-8 --nvr --log                           | check images in brew; output NVRs can be copied to Errata; show links to Brew logs
-  $0 -b crw-2.5-rhel-8 --osbs                                | check images in OSBS ( registry-proxy.engineering.redhat.com/rh-osbs )
-  $0 -b crw-2.5-rhel-8 --osbs --pushtoquay='2.5 latest'      | pull images from OSBS, then push matching tag to quay, including extra tags if set
+  $0 --crw23 --nvr --log                                     | check images in brew; output NVRs can be copied to Errata; show links to Brew logs
+  $0 --crw23 --osbs                                          | check images in OSBS ( registry-proxy.engineering.redhat.com/rh-osbs )
+  $0 --crw23 --osbs --pushtoquay='2.3 latest'                | pull images from OSBS, then push matching tag to quay, including extra tags if set
 
 "
+	exit
 }
-if [[ $# -lt 1 ]]; then usage; exit 1; fi
+if [[ $# -lt 1 ]]; then usage; fi
 
 REGISTRY="https://registry.redhat.io" # or http://brew-pulp-docker01.web.prod.ext.phx2.redhat.com:8888 or https://registry-1.docker.io or https://registry.access.redhat.com
 CONTAINERS=""
 # while [[ "$#" -gt 0 ]]; do
 #   case $1 in
-while [[ "$#" -gt 0 ]]; do
-  case $1 in
-    '-b') DWNSTM_BRANCH="$2"; shift 1;; 
-    '--crw24'|'--crw-2.4-rhel-8') CONTAINERS="${CRW24_CONTAINERS_RHCC}"; candidateTag="crw-2.4-rhel-8-container-candidate"; BASETAG=2.4;; 
+for key in "$@"; do
+  case $key in
+    '--crw23') CONTAINERS="${CRW22_CONTAINERS_RHCC}";         candidateTag="crw-2.2-rhel-8-container-candidate"; BASETAG=2.3; shift 0;; 
+    '--crw22') CONTAINERS="${CRW22_CONTAINERS_RHCC}";         candidateTag="crw-2.2-rhel-8-container-candidate"; BASETAG=2.2; shift 0;;
     '-c') CONTAINERS="${CONTAINERS} $2"; shift 1;;
     '-x') EXCLUDES="$2"; shift 1;;
-    '-q') QUIET=1;;
-    '-v') QUIET=0; VERBOSE=1;;
-    '-a'|'--arches') ARCHES=1;;
+    '-q') QUIET=1; shift 0;;
+    '-v') QUIET=0; VERBOSE=1; shift 0;;
+    '-a'|'--arches') ARCHES=1; shift 0;;
     '-r') REGISTRY="$2"; shift 1;;
-    '--rhcc') REGISTRY="http://registry.redhat.io";;
-    '--stage') REGISTRY="http://registry.stage.redhat.io";;
-    '--pulp-old') REGISTRY="http://brew-pulp-docker01.web.prod.ext.phx2.redhat.com:8888"; EXCLUDES="latest|candidate|guest|containers";;
-    '-p'|'--osbs') REGISTRY="http://registry-proxy.engineering.redhat.com/rh-osbs"; EXCLUDES="latest|candidate|guest|containers";;
-    '-d'|'--docker') REGISTRY="http://docker.io";;
-    '--quay') REGISTRY="http://quay.io";;
-    '--pushtoquay') PUSHTOQUAY=1; PUSHTOQUAYTAGS="";;
-    --pushtoquay=*) PUSHTOQUAY=1; PUSHTOQUAYTAGS="$(echo "${1#*=}")";;
+    '--rhcc') REGISTRY="http://registry.redhat.io"; shift 0;;
+    '--stage') REGISTRY="http://registry.stage.redhat.io"; shift 0;;
+    '--pulp-old') REGISTRY="http://brew-pulp-docker01.web.prod.ext.phx2.redhat.com:8888"; EXCLUDES="candidate|guest|containers"; shift 0;;
+    '-p'|'--osbs') REGISTRY="http://registry-proxy.engineering.redhat.com/rh-osbs"; EXCLUDES="candidate|guest|containers"; shift 0;;
+    '-d'|'--docker') REGISTRY="http://docker.io"; shift 0;;
+           '--quay') REGISTRY="http://quay.io"; shift 0;;
+           '--pushtoquay') PUSHTOQUAY=1; PUSHTOQUAYTAGS=""; shift 0;;
+           --pushtoquay=*) PUSHTOQUAY=1; PUSHTOQUAYTAGS="$(echo "${key#*=}")"; shift 0;;
     '-n') NUMTAGS="$2"; shift 1;;
-    '--dockerfile') SHOWHISTORY=1;;
-    '--tag') BASETAG="$2"; shift 1;; 
-    '--candidatetag') candidateTag="$2"; shift 1;; 
-    '--nvr') if [[ ! $CONTAINERS ]]; then CONTAINERS="${CRW25_CONTAINERS_OSBS}"; fi; SHOWNVR=1;;
-    '--tagonly') TAGONLY=1;;
-    '--log') SHOWLOG=1;;
-    '--sort') SORTED=1;;
-    '-h') usage; exit 1;;
+    '--dockerfile') SHOWHISTORY=1; shift 0;;
+    '--tag') BASETAG="$1"; shift 1;; 
+    '--nvr') if [[ ! $CONTAINERS ]]; then CONTAINERS="${CRW22_CONTAINERS_OSBS}"; fi; SHOWNVR=1; shift 0;;
+    '--tagonly') TAGONLY=1; shift 0;;
+    '--log') SHOWLOG=1; shift 0;;
+    '-h') usage;;
   esac
   shift 1
 done
 
-# echo "DWNSTM_BRANCH = $DWNSTM_BRANCH"
-# tag to search for in quay
-if [[ -z ${BASETAG} ]] && [[ ${DWNSTM_BRANCH} ]]; then
-	BASETAG=${DWNSTM_BRANCH#*-}
-	BASETAG=${BASETAG%%-*}
-else
-	usage; exit 1
-fi
-if [[ -z ${candidateTag} ]] && [[ ${DWNSTM_BRANCH} ]]; then
-	candidateTag="${DWNSTM_BRANCH}-container-candidate"
-else
-	usage; exit 1
-fi
-
-# echo "BASETAG = $BASETAG"
-# echo "candidateTag = $candidateTag
-# echo "containers = $CONTAINERS"
+getTag () {
+for d in $*; do
+  tag=${d##*:}
+  tag=${tag##*-container-}
+  echo $tag
+done
+}
 
 if [[ ${REGISTRY} != "" ]]; then 
 	REGISTRYSTRING="--registry ${REGISTRY}"
 	REGISTRYPRE="${REGISTRY##*://}/"
 	if [[ ${REGISTRY} == *"registry-proxy.engineering.redhat.com"* ]]; then
-		if [[ ${CONTAINERS} == "" ]]; then CONTAINERS="${CRW25_CONTAINERS_OSBS//codeready-workspaces\//codeready-workspaces-}"; fi
-		if [[ ${CONTAINERS} == "${CRW25_CONTAINERS_RHCC}" ]]; then CONTAINERS="${CRW25_CONTAINERS_OSBS//codeready-workspaces\//codeready-workspaces-}"; fi
+		if [[ ${CONTAINERS} == "" ]]; then CONTAINERS="${CRW22_CONTAINERS_OSBS//codeready-workspaces\//codeready-workspaces-}"; fi
+		if [[ ${CONTAINERS} == "${CRW22_CONTAINERS_RHCC}" ]]; then CONTAINERS="${CRW22_CONTAINERS_OSBS//codeready-workspaces\//codeready-workspaces-}"; fi
 	elif [[ ${REGISTRY} == *"quay.io"* ]]; then
-		if [[ ${CONTAINERS} == "${CRW25_CONTAINERS_RHCC}" ]] || [[ ${CONTAINERS} == "" ]]; then
-			CONTAINERS="${CRW25_CONTAINERS_RHCC}"; 
+		if [[ ${CONTAINERS} == "${CRW22_CONTAINERS_RHCC}" ]] || [[ ${CONTAINERS} == "" ]]; then
+			CONTAINERS="${CRW22_CONTAINERS_RHCC}"; 
 			CONTAINERS="${CONTAINERS//codeready-workspaces/crw}"
 		fi
 	fi
@@ -275,9 +184,6 @@ if [[ $SHOWHISTORY -eq 1 ]]; then
 fi
 
 if [[ ${CONTAINERS} == "" ]]; then usage; fi
-
-# sort the container list
-if [[ $SORTED -eq 1 ]]; then CONTAINERS=$(tr ' ' '\n' <<< "${CONTAINERS}" | sort | uniq); fi
 
 # special case!
 if [[ ${SHOWNVR} -eq 1 ]]; then 
@@ -312,23 +218,17 @@ for URLfrag in $CONTAINERS; do
 		URLfragtag="^- ${URLfragtag}"
 	fi
 
-	ARCH_OVERRIDE="" # optional override so that an image without amd64 won't return a failure when searching on amd64 arch machines
-	if [[ ${URLfrag} == *"-openj9"* ]]; then
-		ARCH_OVERRIDE="--override-arch s390x"
-	fi
-
-	# shellcheck disable=SC2001
-	QUERY="$(echo $URL | sed -e "s#.\+\(registry.redhat.io\|registry.access.redhat.com\)/#skopeo inspect ${ARCH_OVERRIDE} docker://${REGISTRYPRE}#g")"
+	QUERY="$(echo $URL | sed -e "s#.\+\(registry.redhat.io\|registry.access.redhat.com\)/#skopeo inspect docker://${REGISTRYPRE}#g")"
 	if [[ $VERBOSE -eq 1 ]]; then 
-		      echo ""; echo "# $QUERY | jq -r .RepoTags[] | egrep -v '${EXCLUDES}' | grep -F '${BASETAG}' | sort -V | tail -5"
+		echo ""; echo "# $QUERY | jq .RepoTags | egrep -v \"\[|\]|latest\" | grep -F "${BASETAG}" | sed -e 's#.*\"\(.\+\)\",*#- \1#' | sort -V|tail -5"
 	fi
-	LATESTTAGs=$(${QUERY} 2>/dev/null | jq -r .RepoTags[] | egrep -v "${EXCLUDES}" | grep -F "${BASETAG}" | sort -V | tail -${NUMTAGS})
+	LATESTTAGs=$(${QUERY} 2>/dev/null | jq .RepoTags | egrep -v "\[|\]|latest" | grep -F "${BASETAG}" | sed -e 's#.*\"\(.\+\)\",*#- \1#' | sort -V | grep "${URLfragtag}"|egrep -v "\"|latest"|egrep -v "${EXCLUDES}"|sed -e "s#^-##" -e "s#[\n\r\ ]\+##g"|tail -${NUMTAGS})
 	if [[ ! ${LATESTTAGs} ]]; then # try again with -container suffix
-		QUERY="$(echo ${URL}-container | sed -e "s#.\+\(registry.redhat.io\|registry.access.redhat.com\)/#skopeo inspect ${ARCH_OVERRIDE} docker://${REGISTRYPRE}#g")"
+		QUERY="$(echo ${URL}-container | sed -e "s#.\+\(registry.redhat.io\|registry.access.redhat.com\)/#skopeo inspect docker://${REGISTRYPRE}#g")"
 		if [[ $VERBOSE -eq 1 ]]; then 
-			      echo ""; echo "# $QUERY | jq -r .RepoTags[] | egrep -v '${EXCLUDES}' | grep -F '${BASETAG}' | sort -V | tail -5" 
+			echo ""; echo "# $QUERY | jq .RepoTags | egrep -v \"\[|\]|latest\" | grep -F "${BASETAG}" | sed -e 's#.*\"\(.\+\)\",*#- \1#' | sort -V|tail -5" 
 		fi
-		LATESTTAGs=$(${QUERY} 2>/dev/null | jq -r .RepoTags[] | egrep -v "${EXCLUDES}" | grep -F "${BASETAG}" | sort -V | tail -${NUMTAGS})
+		LATESTTAGs=$(${QUERY} 2>/dev/null | jq .RepoTags | egrep -v "\[|\]|latest" | grep -F "${BASETAG}" | sed -e 's#.*\"\(.\+\)\",*#- \1#' | sort -V | grep "${URLfragtag}"|egrep -v "\"|latest"|egrep -v "${EXCLUDES}"|sed -e "s#^-##" -e "s#[\n\r\ ]\+##g"|tail -${NUMTAGS})
 	fi
 
 	if [[ ! ${LATESTTAGs} ]]; then
@@ -350,7 +250,7 @@ for URLfrag in $CONTAINERS; do
 				arch_string=""
 				raw_inspect=$(skopeo inspect --raw docker://${REGISTRYPRE}${URLfrag%%:*}:${LATESTTAG})
 				if [[ $(echo "${raw_inspect}" | grep "architecture") ]]; then 
-					arches=$(echo $raw_inspect | yq -r .manifests[].platform.architecture)
+					arches=$(echo $raw_inspect | yq .manifests[].platform.architecture -r)
 				else
 					arches="unknown (amd64 only?)"
 				fi
@@ -379,15 +279,12 @@ for URLfrag in $CONTAINERS; do
 		fi
 
 		if [[ ${PUSHTOQUAY} -eq 1 ]] && [[ ${REGISTRY} != *"quay.io"* ]]; then
-			QUAYDEST="${REGISTRYPRE}${URLfrag}"; QUAYDEST=${QUAYDEST##*codeready-workspaces-} # plugin-java8 or operator
-			# special case for the operator and metadata images, which don't follow the same pattern in osbs as quay
-			if [[ ${QUAYDEST} == "operator" ]] || [[ ${QUAYDEST} == "operator-metadata" ]]; then QUAYDEST="crw-2-rhel8-${QUAYDEST}"; fi
-			QUAYDEST="quay.io/crw/${QUAYDEST}"
+		    QUAYDEST="${REGISTRYPRE}${URLfrag}"; QUAYDEST="quay.io/crw/${QUAYDEST##*codeready-workspaces-}"
 			if [[ $VERBOSE -eq 1 ]]; then echo "Copy ${REGISTRYPRE}${URLfrag}:${LATESTTAG} to ${QUAYDEST}:${LATESTTAG}"; fi
-			CMD="skopeo --insecure-policy copy --all docker://${REGISTRYPRE}${URLfrag}:${LATESTTAG} docker://${QUAYDEST}:${LATESTTAG}"; echo $CMD; $CMD
+			CMD="skopeo copy --all docker://${REGISTRYPRE}${URLfrag}:${LATESTTAG} docker://${QUAYDEST}:${LATESTTAG}"; echo $CMD; $CMD
 			for qtag in ${PUSHTOQUAYTAGS}; do
 				if [[ $VERBOSE -eq 1 ]]; then echo "Copy ${REGISTRYPRE}${URLfrag}:${LATESTTAG} to ${QUAYDEST}:${qtag}"; fi
-				CMD="skopeo --insecure-policy copy --all docker://${REGISTRYPRE}${URLfrag}:${LATESTTAG} docker://${QUAYDEST}:${qtag}"; echo $CMD; $CMD
+				CMD="skopeo copy --all docker://${REGISTRYPRE}${URLfrag}:${LATESTTAG} docker://${QUAYDEST}:${qtag}"; echo $CMD; $CMD
 			done
 		fi
 

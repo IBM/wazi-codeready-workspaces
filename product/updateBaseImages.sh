@@ -9,33 +9,28 @@
 #
 
 # script to query latest tags of the FROM repos, and update Dockerfiles using the latest base images
-# REQUIRES: 
-#    * skopeo >=0.40 (for authenticated registry queries)
-#    * jq to do json queries
+# requires skopeo (for authenticated registry queries) and jq to do json queries
 # 
 # https://registry.redhat.io is v2 and requires authentication to query, so login in first like this:
 # docker login registry.redhat.io -u=USERNAME -p=PASSWORD
 
-command -v jq >/dev/null 2>&1 || { echo "jq is not installed. Aborting."; exit 1; }
-command -v skopeo >/dev/null 2>&1 || { echo "skopeo is not installed. Aborting."; exit 1; }
-checkVersion() {
-  if [[  "$1" = "`echo -e "$1\n$2" | sort -V | head -n1`" ]]; then
-    # echo "[INFO] $3 version $2 >= $1, can proceed."
-	true
-  else 
-    echo "[ERROR] Must install $3 version >= $1"
-    exit 1
-  fi
-}
-checkVersion 0.40 "$(skopeo --version | sed -e "s/skopeo version //")" skopeo
+if [[ ! -x /usr/bin/skopeo ]]; then 
+	echo "This script requires skopeo. Please install it."
+	exit 1
+fi
+
+if [[ ! -x /usr/bin/jq ]]; then 
+	echo "This script requires jq. Please install it."
+	exit 1
+fi
 
 QUIET=0 	# less output - omit container tag URLs
 VERBOSE=0	# more output
 WORKDIR=`pwd`
-BRANCH=crw-2.5-rhel-8 # or another branch, depends on the repo
+BRANCH=crw-2.2-rhel-8 # not master
 DOCKERFILE="Dockerfile" # or "rhel.Dockerfile"
 MAXDEPTH=2
-PR_BRANCH="pr-new-base-images-$(date +%s)"
+PR_BRANCH="pr-master-new-base-images-$(date +%s)"
 OPENBROWSERFLAG="" # if a PR is generated, open it in a browser
 docommit=1 # by default DO commit the change
 dopush=1 # by default DO push the change
@@ -59,12 +54,11 @@ checkrecentupdates () {
 
 usage () {
 	echo "Usage:   $0 -b [BRANCH] [-w WORKDIR] [-f DOCKERFILE] [-maxdepth MAXDEPTH]"
-	echo "Downstream Example: $0 -b crw-2.5-rhel-8 -w $(pwd) -f rhel.Dockerfile -maxdepth 2"
-	echo "Upstream   Example: $0 -b master -w dockerfiles/ -f \*from.dockerfile -maxdepth 5 -o -prb pr-new-theia-base-images"
+	echo "Example: $0 -b crw-2.2-rhel-8 -w $(pwd) -f rhel.Dockerfile -maxdepth 2"
 	echo "Options: 
 	--no-commit, -n    do not commit to BRANCH
 	--no-push, -p      do not push to BRANCH
-	-prb               set a PR_BRANCH; default: pr-new-base-images-(timestamp)
+	-prb               set a PR_BRANCH; default: pr-master-new-base-images-(timestamp)
 	-o                 open browser if PR generated
 	-q, -v             quiet, verbose output
 	--help, -h         help
@@ -222,16 +216,17 @@ for d in $(find ${WORKDIR} -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort); do
 
 									# shellcheck disable=SC2181
 									if [[ $? -gt 0 ]] || [[ $PUSH_TRY == *"protected branch hook declined"* ]]; then
-										# create pull request if target branch is restricted access
+										# create pull request for master branch, as branch is restricted
 										git branch "${PR_BRANCH}" || true
 										git checkout "${PR_BRANCH}" || true
 										git pull origin "${PR_BRANCH}" || true
 										git push origin "${PR_BRANCH}"
 										lastCommitComment="$(git log -1 --pretty=%B)"
 										if [[ $(/usr/local/bin/hub version 2>/dev/null || true) ]] || [[ $(which hub 2>/dev/null || true) ]]; then
-											hub pull-request -f -m "${lastCommitComment}
+											# collect additional commits in the same PR if it already exists 
+											{ hub pull-request -f -m "chore(base images) Update base image(s) to latest tag(s)
 
-${lastCommitComment}" -b "${BRANCHUSED}" -h "${PR_BRANCH}" "${OPENBROWSERFLAG}"
+${lastCommitComment}" -b "${BRANCHUSED}" -h "${PR_BRANCH}" "${OPENBROWSERFLAG}"; } || { git merge master; git push origin "${PR_BRANCH}"; }
 										else
 											echo "# Warning: hub is required to generate pull requests. See https://hub.github.com/ to install it."
 											echo -n "# To manually create a pull request, go here: "

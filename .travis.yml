@@ -2,28 +2,19 @@ language: node_js
 sudo: required
 dist: trusty
 group: bluezone
-node_js:
-- 12.4.0
 services:
 - docker
 env:
   global:
-#  - CURRENT_VERSION="1.1.0"
   - REPOSITORY="docker.io"
-  - FOLDER_PATH="/ibmcom/"
+  - IMAGE_PATH="/ibmcom/"
   - IMAGE_NAME_PLUGIN="wazi-code-plugin"
   - IMAGE_NAME_DEVFILE="wazi-code-dev-file"
-before_install:
-#  - mkdir -p ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-developer/${CURRENT_VERSION}/extensions
-#  - mkdir -p ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-debug/${CURRENT_VERSION}/extensions
-#  - curl https://public.dhe.ibm.com/ibmdl/export/pub/software/htp/zos/tools/wazi/wazi-development-client-1.0.0-20200624.zip | jar xv
-#  - mv Zowe.vscode-extension-for-zowe-1.6.0.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-developer/${CURRENT_VERSION}/extensions/wazi-vscode-extension-for-zowe.vsix
-#  - mv zopeneditor-1.0.1.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-developer/${CURRENT_VERSION}/extensions/zopeneditor.vsix
-#  - mv zopendebug-1.0.0.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-debug/${CURRENT_VERSION}/extensions/zopendebug.vsix
-#  - mv zopendebug-profileui-1.0.0.vsix ./dependencies/che-plugin-registry/v3/plugins/ibm/wazi-debug/${CURRENT_VERSION}/extensions/zopendebug-profileui.vsix
+  - PLUGIN_DOCKERFILE="./dependencies/che-plugin-registry/build/dockerfiles/rhel.Dockerfile"
+  - DEVFILE_DOCKERFILE="./dependencies/che-devfile-registry/build/dockerfiles/rhel.Dockerfile"
 install: 
-  - docker build -t ${REPOSITORY}${FOLDER_PATH}${IMAGE_NAME_PLUGIN}:travis -f ./dependencies/che-plugin-registry/build/dockerfiles/rhel.Dockerfile --build-arg "PATCHED_IMAGES_TAG=2.2" --build-arg LATEST_ONLY="false" --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-plugin-registry/
-  - docker build -t ${REPOSITORY}${FOLDER_PATH}${IMAGE_NAME_DEVFILE}:travis -f ./dependencies/che-devfile-registry/build/dockerfiles/rhel.Dockerfile --build-arg "PATCHED_IMAGES_TAG=2.2" --build-arg LATEST_ONLY="false" --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-devfile-registry/
+  - docker build -t ${REPOSITORY}${IMAGE_PATH}${IMAGE_NAME_DEVFILE}:travis -f ${DEVFILE_DOCKERFILE} --build-arg "PATCHED_IMAGES_TAG=2.2" --build-arg LATEST_ONLY="false" --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-devfile-registry/
+  - docker build -t ${REPOSITORY}${IMAGE_PATH}${IMAGE_NAME_PLUGIN}:travis -f ${PLUGIN_DOCKERFILE} --build-arg "PATCHED_IMAGES_TAG=2.2" --build-arg LATEST_ONLY="false" --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-plugin-registry/
 script: echo "Success!"
 notifications:
   slack: ibm-systems-z:kiD2FZtJUJtUSp57dwHWwNX1
