@@ -11,7 +11,7 @@
 #
 
 displayName: Wazi Developer
-description: IBM Z Open Editor 1.2.0 with IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, REXX 2.4, Zowe Explorer 1.12.1, IBM Z Open Debug 1.1.1
+description: IBM Z Open Editor 1.2.0 with IBM Z Enterprise COBOL 6.3, PL/I 5.3, HLASM 2.4, TSO/E REXX, Zowe Explorer 1.12.1, IBM Z Open Debug 1.1.1
 tags: ["COBOL", "PL/I", "PLI", "PL1", "HLASM", "JCL", "IDE", "LSP", "language-server", "z/OS", "zOS", "IBM Z", "Z Software", "Zowe", "Mainframe", "REXX", "Debug"]
 icon: /images/type-wazi.svg
 globalMemoryLimit: 3000Mi
