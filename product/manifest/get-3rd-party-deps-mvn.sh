@@ -2,29 +2,19 @@
 
 # script to generate a manifest of all the maven dependencies used to build upstream Che projects
 
-MIDSTM_BRANCH=""
-usage () 
-{
-    echo "Usage: $0 -b crw-2.y-rhel-8 -v 2.y.0"
-    exit
-}
-# commandline args
-while [[ "$#" -gt 0 ]]; do
-  case $1 in
-    '-b') MIDSTM_BRANCH="$2"; shift 1;;
-    '-v') CSV_VERSION="$2"; shift 1;;
-  esac
-  shift 1
-done
+# compute version from latest operator package.yaml, eg., 2.3.0
+# TODO when we switch to OCP 4.6 bundle format, extract this version from another place
 
-if [[ ! ${MIDSTM_BRANCH} ]]; then usage; fi
+MIDSTM_BRANCH="master"
+
+CSV_VERSION="$1"
 if [[ ! ${CSV_VERSION} ]]; then 
-  CSV_VERSION=$(curl -sSLo - https://raw.githubusercontent.com/redhat-developer/codeready-workspaces-operator/${MIDSTM_BRANCH}/manifests/codeready-workspaces.csv.yaml | yq -r .spec.version)
+  CSV_VERSION=$(curl -sSLo - https://raw.githubusercontent.com/redhat-developer/codeready-workspaces-operator/${MIDSTM_BRANCH}/controller-manifests/codeready-workspaces.package.yaml | yq .channels[0].currentCSV -r | sed -r -e "s#crwoperator.v##")
 fi
 
 # use x.y (not x.y.z) version, eg., 2.3
 CRW_VERSION=$(curl -sSLo - https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/${MIDSTM_BRANCH}/dependencies/VERSION)
-CRW_TAG_OR_BRANCH=${MIDSTM_BRANCH}
+CRW_TAG_OR_BRANCH=master
 
 # use x.y.z version, eg., 7.16.3
 CHE_VERSION=$(curl -sSLo - https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/${MIDSTM_BRANCH}/pom.xml | grep "<che.version>" | sed -r -e "s#.*<che.version>(.+)</che.version>.*#\1#")
@@ -33,7 +23,7 @@ CHE_VERSION=$(curl -sSLo - https://raw.githubusercontent.com/redhat-developer/co
 CHE_PARENT_VERSION=$(curl -sSLo - https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/${MIDSTM_BRANCH}/pom.xml | \
    grep -A1 "<groupId>org.eclipse.che.parent</groupId>" | tail -1 | sed -r -e "s#.*<version>(.+)</version>.*#\1#")
 
-cd /tmp || exit
+cd /tmp
 mkdir -p ${WORKSPACE}/${CSV_VERSION}/mvn
 MANIFEST_FILE="${WORKSPACE}/${CSV_VERSION}/mvn/manifest-mvn.txt"
 
@@ -44,7 +34,7 @@ function mnf () {
 }
 
 function clone_and_generate_dep_tree () {
-	cd /tmp || exit
+	cd /tmp
 	GITREPO=$1
 	GITTAG=$2
 	rm -fr ${GITREPO##*/}

@@ -23,8 +23,6 @@ components:
 - type: chePlugin
   id: ibm/wazi-developer/latest
   alias: wazi-developer
-  preferences:
-    Zowe-Temp-Folder-Location: '{"folderPath": "/projects"}'
 - type: chePlugin
   id: ibm/wazi-debug/latest
   alias: wazi-debug
@@ -33,7 +31,7 @@ components:
   alias: vscode-yaml
 - type: dockerimage
   alias: wazi
-  image: docker.io/ibmcom/wazi-code-codeready@sha256:4bbaebd29665459597b1907403666403a61fa8666de13ef1d06255b1370391fc
+  image: docker.io/ibmcom/wazi-code-codeready:latest
   memoryLimit: 512Mi
   volumes:
     - name: wazi

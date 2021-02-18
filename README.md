@@ -9,6 +9,8 @@
 
 IBM Wazi Developer for Red Hat CodeReady Workspaces (IBM Wazi Developer for Workspaces), delivers cloud-native developer experience, enabling development and testing of IBM z/OS application components in containerized, z/OS sandbox environment on Red Hat OpenShift Container Platform running on x86 hardware, and providing capability to deploy applications into production on native z/OS running on IBM Z hardware. IBM Wazi Developer is a development environment that provides an in-browser IDE with a single-click developer workspace with the capabilities to code, edit, build, and debug.  
   
+- This repository is based off of the upstream [Red Hat CodeReady for Workspaces](https://github.com/redhat-developer/codeready-workspaces), where the code is in other upstream repositories by the [Eclipse Foundation](https://github.com/eclipse/).
+  
 ## Features
 
 IBM Wazi Developer for Workspaces provides a custom stack for mainframe developers with the all-in-one mainframe development package that includes the following capabilities:

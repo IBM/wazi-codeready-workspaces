@@ -1,56 +1,20 @@
 #!/usr/bin/env groovy
 
-import hudson.FilePath
-import groovy.transform.Field
+def SOURCE_BRANCH = "master"
 
 // PARAMETERS for this pipeline:
+// getLatestImageTagsFlags="--crw23" # placeholder for flag to pass to getLatestImageTags.sh
 // mailSubject  - subject to put on the email, eg., CRW 2.3.0.RC-mm-yy ready for QE
 // errataURL - URL for the errata, eg., https://errata.devel.redhat.com/errata/container/56923
 // unresolvedCriticalsBlockersURL - URL for unresolved blockers/criticals, eg., Unresolved criticals/blockers:
-//   https://issues.redhat.com/browse/CRW-883?jql=fixversion%20%3D%202.4.0.GA%20AND%20project%20%3D%20CRW%20AND%20priority%20%3E%20Major%20AND%20resolution%20is%20null
+//   https://issues.redhat.com/browse/CRW-883?jql=fixversion%20%3D%202.3.0.GA%20AND%20project%20%3D%20CRW%20AND%20priority%20%3E%20Major%20AND%20resolution%20is%20null
 // additionalNotes - footer for the email
 // doSendEmail - boolean: if checked, send mail; if not, draft email but do not send
 // doOSBS - boolean: if checked, include OSBS images in email
 // doStage - boolean: if checked, include RHCC stage images in email
 // recipientOverride - if set, send mail to recipient(s) listed rather than default mailing lists
 
-@Field String MIDSTM_BRANCH="crw-2.5-rhel-8"
-
-@Field String CRW_VERSION_F = ""
-def String getCrwVersion(String MIDSTM_BRANCH) {
-  if (CRW_VERSION_F.equals("")) {
-    CRW_VERSION_F = sh(script: '''#!/bin/bash -xe
-    curl -sSLo- https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/''' + MIDSTM_BRANCH + '''/dependencies/VERSION''', returnStdout: true).trim()
-  }
-  return CRW_VERSION_F
-}
-
-def installSkopeo(String CRW_VERSION)
-{
-sh '''#!/bin/bash -xe
-pushd /tmp >/dev/null
-# remove any older versions
-sudo yum remove -y skopeo || true
-# install from @kcrane build
-if [[ ! -x /usr/local/bin/skopeo ]]; then
-    sudo curl -sSLO "https://codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/job/crw-deprecated_''' + CRW_VERSION + '''/lastSuccessfulBuild/artifact/codeready-workspaces-deprecated/skopeo/target/skopeo-$(uname -m).tar.gz"
-fi
-if [[ -f /tmp/skopeo-$(uname -m).tar.gz ]]; then 
-    sudo tar xzf /tmp/skopeo-$(uname -m).tar.gz --overwrite -C /usr/local/bin/
-    sudo chmod 755 /usr/local/bin/skopeo
-    sudo rm -f /tmp/skopeo-$(uname -m).tar.gz
-fi
-popd >/dev/null
-skopeo --version
-'''
-}
-
-def installYq(){
-		sh '''#!/bin/bash -xe
-sudo yum -y install jq python3-six python3-pip
-sudo /usr/bin/python3 -m pip install --upgrade pip yq; jq --version; yq --version
-'''
-}
+import hudson.FilePath;
 
 def sendMail(mailSubject,mailBody) { // NEW_OSBS
     // # TOrecipients - comma and space separated list of recipient email addresses
@@ -93,11 +57,7 @@ timeout(120) {
         try { 
             stage "Fetch latest image tags and send email"
             cleanWs()
-            installYq()
-            CRW_VERSION = getCrwVersion(MIDSTM_BRANCH)
-            println "CRW_VERSION = '" + CRW_VERSION + "'"
-            installSkopeo(CRW_VERSION)
-            if (mailSubject.contains("CRW 2.y.0.tt-mm-yy ready for QE") || mailSubject.equals(""))
+            if (mailSubject.equals("CRW 2.3.0.tt-mm-yy ready for QE") || mailSubject.equals(""))
             {
                 doSendEmail="false"
                 errorOccurred = errorOccurred + 'Error: need to set an actual email subject. Failure!\n'
@@ -106,10 +66,10 @@ timeout(120) {
             } else {
                 currentBuild.description=mailSubject
                 sh (
-                    script: 'curl -sSLO https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/'+MIDSTM_BRANCH+'/product/getLatestImageTags.sh && chmod +x getLatestImageTags.sh',
+                    script: 'curl -sSLO https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/product/getLatestImageTags.sh && chmod +x getLatestImageTags.sh',
                     returnStdout: true).trim().split( '\n' )
                 sh (
-                    script: 'curl -sSLO https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/'+MIDSTM_BRANCH+'/product/getTagForImage.sh && chmod +x getTagForImage.sh',
+                    script: 'curl -sSLO https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/product/getTagForImage.sh && chmod +x getTagForImage.sh',
                     returnStdout: true).trim().split( '\n' )
                 def NEW_QUAY = ""
                 def NEW_OSBS = ""
@@ -117,14 +77,14 @@ timeout(120) {
                 def NEW_NVR = ""
                 parallel quay_check: {
                     NEW_QUAY = sh (
-                        script: "./getLatestImageTags.sh -b ${MIDSTM_BRANCH} --quay | tee ${WORKSPACE}/LATEST_IMAGES.quay",
+                        script: './getLatestImageTags.sh ${getLatestImageTagsFlags} --quay | tee ${WORKSPACE}/LATEST_IMAGES.quay',
                         returnStdout: true).trim().split( '\n' )
                         errorOccurred = checkFailure(NEW_QUAY, "Quay", errorOccurred)
                 }, 
                 osbs_check: {
                     if (doOSBS.equals("true")) {
                         NEW_OSBS = sh (
-                        script: "./getLatestImageTags.sh -b ${MIDSTM_BRANCH} --osbs | tee ${WORKSPACE}/LATEST_IMAGES.osbs",
+                        script: './getLatestImageTags.sh ${getLatestImageTagsFlags} --osbs | tee ${WORKSPACE}/LATEST_IMAGES.osbs',
                         returnStdout: true).trim().split( '\n' )
                         errorOccurred = checkFailure(NEW_OSBS, "OSBS", errorOccurred)
                     }
@@ -132,14 +92,14 @@ timeout(120) {
                 stg_check: {
                     if (doStage.equals("true")) {
                         NEW_STG = sh (
-                        script: "./getLatestImageTags.sh -b ${MIDSTM_BRANCH} --stage | tee ${WORKSPACE}/LATEST_IMAGES.stage",
+                        script: './getLatestImageTags.sh ${getLatestImageTagsFlags} --stage | tee ${WORKSPACE}/LATEST_IMAGES.stage',
                         returnStdout: true).trim().split( '\n' )
                         errorOccurred = checkFailure(NEW_STG, "Stage", errorOccurred)
                     }
                 }, 
                 nvr_check: {
                     NEW_NVR = sh (
-                        script: "./getLatestImageTags.sh -b ${MIDSTM_BRANCH} --nvr | tee ${WORKSPACE}/LATEST_IMAGES.nvr",
+                        script: './getLatestImageTags.sh ${getLatestImageTagsFlags} --nvr | tee ${WORKSPACE}/LATEST_IMAGES.nvr',
                         returnStdout: true).trim().split( '\n' )
                 }
 
@@ -180,26 +140,19 @@ timeout(120) {
                 archiveArtifacts fingerprint: false, artifacts:"LATEST_IMAGES*"
                 if (!DIFF_LATEST_IMAGES_QUAY_V_NVR.equals("") || !DIFF_LATEST_IMAGES_QUAY_V_OSBS.equals("") || !DIFF_LATEST_IMAGES_QUAY_V_STG.equals("")) {
                     // error! quay and nvr versions do not match
-                    errorOccurred = errorOccurred + 'Error: Quay & Brew image versions not aligned:\n' + 
-                    "=================== QUAY v NVR ===================\n" + 
-                    DIFF_LATEST_IMAGES_QUAY_V_NVR + '\n' + 
-                    "=================== QUAY v OSBS ===================\n" + 
-                    DIFF_LATEST_IMAGES_QUAY_V_OSBS + '\n' + 
-                    "=================== QUAY v STG ===================\n" + 
-                    DIFF_LATEST_IMAGES_QUAY_V_STG + '\n' + 
-                    ' Failure!\n'
+                    errorOccurred = errorOccurred + 'Error: Quay & Brew image versions not aligned. Failure!\n'
                     currentBuild.description="Quay/Brew version mismatch!"
                     currentBuild.result = 'FAILURE'
 
                     // trigger a push of latest images in Brew to Quay
-                    build job: "push-latest-containers-to-quay_${MIDSTM_BRANCH}", 
-                        parameters: [[$class: 'StringParameterValue', name: 'MIDSTM_BRANCH', value: "${MIDSTM_BRANCH}"]],
+                    build job: 'push-latest-containers-to-quay', 
+                        parameters: [[$class: 'StringParameterValue', name: 'getLatestImageTagsFlags', value: getLatestImageTagsFlags]],
                         propagate: false,
                         wait: true
 
                     // trigger an update of metadata and registries
-                    build job: "update-digests-in-registries-and-metadata_${MIDSTM_BRANCH}",
-                        parameters: [[$class: 'StringParameterValue', name: 'MIDSTM_BRANCH', value: "${MIDSTM_BRANCH}"]],
+                    build job: 'update-digests-in-registries-and-metadata',
+                        parameters: [[$class: 'StringParameterValue', name: 'getLatestImageTagsFlags', value: getLatestImageTagsFlags]],
                         propagate: false,
                         wait: true
                 }
@@ -213,7 +166,7 @@ timeout(120) {
 
 Latest crwctl builds:
 
-https://codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/job/crwctl_''' + CRW_VERSION + '''/lastSuccessfulBuild/artifact/codeready-workspaces-chectl/dist/channels/
+https://codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/job/crwctl_master/lastSuccessfulBuild/artifact/codeready-workspaces-chectl/dist/channels/
  - or -
 https://github.com/redhat-developer/codeready-workspaces-chectl/releases
 

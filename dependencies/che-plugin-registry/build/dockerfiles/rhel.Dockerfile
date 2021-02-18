@@ -14,7 +14,7 @@
 
 # Builder: check meta.yamls and create index.json
 # https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/ubi8-minimal
-FROM registry.access.redhat.com/ubi8-minimal:8.3-201 as builder
+FROM registry.access.redhat.com/ubi8-minimal:8.2-345 as builder
 USER 0
 
 ################# 
@@ -82,7 +82,7 @@ FROM registry.access.redhat.com/rhscl/httpd-24-rhel7:2.4-119 AS registry
 
 ENV PRODUCT="IBM Wazi Developer for Red Hat CodeReady Workspaces" \
     COMPANY="IBM" \
-    VERSION="1.1.0" \
+    VERSION="1.2.0" \
     RELEASE="1" \
     SUMMARY="IBM Wazi Developer for Workspaces" \
     DESCRIPTION="IBM Wazi Developer for Red Hat CodeReady Workspaces - Plugin" \

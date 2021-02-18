@@ -29,11 +29,9 @@ import static org.eclipse.che.selenium.core.constant.TestTimeoutsConstants.WIDGE
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import com.google.inject.name.Named;
 import org.eclipse.che.selenium.core.SeleniumWebDriver;
 import org.eclipse.che.selenium.core.webdriver.SeleniumWebDriverHelper;
 import org.eclipse.che.selenium.pageobject.ocp.OpenShiftLoginPage;
-import org.eclipse.che.selenium.pageobject.site.CheLoginPage;
 import org.openqa.selenium.By;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
@@ -43,21 +41,6 @@ import org.openqa.selenium.support.PageFactory;
 @Singleton
 public class CodereadyOpenShiftLoginPage extends OpenShiftLoginPage {
   private final SeleniumWebDriverHelper seleniumWebDriverHelper;
-  private final CheLoginPage cheLoginPage;
-
-  @Inject(optional = true)
-  @Named("env.openshift.regular.username")
-  private String openShiftUsername;
-
-  @Inject(optional = true)
-  @Named("env.openshift.regular.password")
-  private String openShiftPassword;
-
-  @Inject(optional = true)
-  @Named("env.openshift.regular.email")
-  private String openShiftEmail;
-
-  private static final String IDENTITY_PROVIDER_NAME = "htpasswd";
 
   protected interface Locators {
     String FIRST_NAME_NAME = "firstName";
@@ -109,13 +92,10 @@ public class CodereadyOpenShiftLoginPage extends OpenShiftLoginPage {
 
   @Inject
   public CodereadyOpenShiftLoginPage(
-      SeleniumWebDriver seleniumWebDriver,
-      SeleniumWebDriverHelper seleniumWebDriverHelper,
-      CheLoginPage cheLoginPage) {
-
-    super(seleniumWebDriver, seleniumWebDriverHelper, cheLoginPage);
+      SeleniumWebDriver seleniumWebDriver, SeleniumWebDriverHelper seleniumWebDriverHelper) {
+    super(seleniumWebDriver, seleniumWebDriverHelper);
     this.seleniumWebDriverHelper = seleniumWebDriverHelper;
-    this.cheLoginPage = cheLoginPage;
+
     PageFactory.initElements(seleniumWebDriver, this);
   }
 
@@ -148,7 +128,7 @@ public class CodereadyOpenShiftLoginPage extends OpenShiftLoginPage {
     seleniumWebDriverHelper.setValue(firstUsername, userName);
     seleniumWebDriverHelper.setValue(lastUsername, userName);
     seleniumWebDriverHelper.setValue(emailName, email);
-    seleniumWebDriverHelper.setValue(usernameInput, "admin");
+    seleniumWebDriverHelper.setValue(usernameInput, userName);
 
     seleniumWebDriverHelper.waitAndClick(submitButton);
   }
@@ -172,26 +152,5 @@ public class CodereadyOpenShiftLoginPage extends OpenShiftLoginPage {
   public void clickOnIdentityProviderLink(String identityProviderName) {
     seleniumWebDriverHelper.waitAndClick(
         By.xpath(format(IDENTITY_PROVIDER_LINK_XPATH, identityProviderName)));
-  }
-
-  public void openshiftLogin() {
-    if (isIdentityProviderLinkVisible(IDENTITY_PROVIDER_NAME)) {
-      clickOnIdentityProviderLink(IDENTITY_PROVIDER_NAME);
-    }
-
-    if (isOpened()) {
-      login(openShiftUsername, openShiftPassword);
-
-      if (isApproveButtonVisible()) {
-        allowPermissions();
-      }
-
-      if (isOpenshiftUpdateLoginPageVisible()) {
-        submit(openShiftUsername, openShiftEmail);
-
-        addToExistingAccount();
-        cheLoginPage.loginWithPredefinedUsername("admin");
-      }
-    }
   }
 }
