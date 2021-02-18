@@ -112,7 +112,7 @@ USER 0
 RUN chmod +x /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh && \
     /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh
 RUN \
-    yum -y -q update gnutls systemd dbus libssh2 glibc nss expat libcom_err libcroco curl python cpio openldap libxml2 libxslt glib2 openssl && \
+    yum -y -q update gnutls systemd dbus libssh2 glibc nss expat libcom_err libcroco curl python cpio openldap libxml2 libxslt glib2 openssl bind-libs perl perl-macros && \
     yum -y -q clean all && rm -rf /var/cache/yum && \
     echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages"
 # Fix for htaccess from VA Scan
