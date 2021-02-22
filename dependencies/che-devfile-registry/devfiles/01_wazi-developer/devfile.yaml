@@ -23,20 +23,20 @@ projects:
 components:
 -
   type: chePlugin
-  id: ibm/wazi-developer/1.1.0
+  id: ibm/wazi-developer/latest
   alias: wazi-developer
 -
   type: chePlugin
-  id: ibm/wazi-debug/1.1.0
+  id: ibm/wazi-debug/latest
   alias: wazi-debug
 -
   type: chePlugin
-  id: redhat/vscode-yaml/0.8.0
+  id: redhat/vscode-yaml/latest
   alias: vscode-yaml
 -
   type: dockerimage
   alias: wazi
-  image: docker.io/ibmcom/wazi-code-codeready:latest
+  image: docker.io/ibmcom/wazi-code-codeready@sha256:fde1b1dc4117058f6e7d6f05876fb398c1f8b0b3291eea8c67134f6ea2688d26
   memoryLimit: 512Mi
   volumes:
     - name: wazi
