@@ -7,7 +7,7 @@ about: Create a bug report that describes a problem, regression, or faulty behav
 
 Before filing a bug check here if this is already a documented or known issue:
 
-- Check the documentation's Known Issues and Troubleshooting pages: <https://www.ibm.com/support/knowledgecenter/SSCH39>
+- Check the documentation's Known Issues and Troubleshooting pages: <https://ibm.biz/wazi-crw-doc>
 - Check the Open and Closed issues list in this GitHub repository: <https://github.com/ibm/wazi-codeready-workspaces/issues>
 - If this is a problem with Red Hat&reg; CodeReady Workspaces then check and file a bug here, please: <https://issues.redhat.com/browse/CRW>
 

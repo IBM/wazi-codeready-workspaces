@@ -8,11 +8,11 @@ env:
   global:
   - IMAGE_DEVFILE="docker.io/ibmcom/wazi-code-dev-file"
   - IMAGE_PLUGIN="docker.io/ibmcom/wazi-code-plugin"
-  - PLUGIN_DOCKERFILE="./dependencies/che-plugin-registry/build/dockerfiles/rhel.Dockerfile"
-  - DEVFILE_DOCKERFILE="./dependencies/che-devfile-registry/build/dockerfiles/rhel.Dockerfile"
+  - PLUGIN_DOCKERFILE="./dependencies/che-plugin-registry/build/dockerfiles/Dockerfile"
+  - DEVFILE_DOCKERFILE="./dependencies/che-devfile-registry/build/dockerfiles/Dockerfile"
 install: 
-  - docker build -t ${IMAGE_DEVFILE}:travis -f ${DEVFILE_DOCKERFILE} --build-arg "PATCHED_IMAGES_TAG=2.2" --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-devfile-registry/
-  - docker build -t ${IMAGE_PLUGIN}:travis -f ${PLUGIN_DOCKERFILE} --build-arg LATEST_ONLY="false" --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-plugin-registry/
+  - docker build -t ${IMAGE_DEVFILE}:travis -f ${DEVFILE_DOCKERFILE} --build-arg "PATCHED_IMAGES_TAG=7.14.0-SNAPSHOT" --target "registry" ./dependencies/che-devfile-registry/
+  - docker build -t ${IMAGE_PLUGIN}:travis -f ${PLUGIN_DOCKERFILE} --build-arg "PATCHED_IMAGES_TAG=7.28.3" --target "registry" ./dependencies/che-plugin-registry/
 script: echo "Success!"
 notifications:
   slack: ibm-systems-z:kiD2FZtJUJtUSp57dwHWwNX1

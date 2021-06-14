@@ -9,13 +9,12 @@ projects:
       location: "https://github.com/crw-samples/nodejs-mongodb-sample"
 components:
   - type: chePlugin
-    id: che-incubator/typescript/latest
-    memoryLimit: 512Mi
+    id: vscode/typescript-language-features/latest
   - type: chePlugin
     id: ms-vscode/node-debug2/latest
   - type: dockerimage
     alias: nodejs
-    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.3
+    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.8
     env:
       # The values below are used to set up the environment for running the application
       - name: SECRET

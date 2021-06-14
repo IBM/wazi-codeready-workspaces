@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2019-2020 Red Hat, Inc.
+# Copyright (c) 2018-2021 Red Hat, Inc.
 # This program and the accompanying materials are made
 # available under the terms of the Eclipse Public License 2.0
 # which is available at https://www.eclipse.org/legal/epl-2.0/
@@ -9,28 +9,42 @@
 #
 
 # script to query latest tags of the FROM repos, and update Dockerfiles using the latest base images
-# requires skopeo (for authenticated registry queries) and jq to do json queries
+# REQUIRES: 
+#    * skopeo >=0.40 (for authenticated registry queries)
+#    * jq to do json queries
 # 
 # https://registry.redhat.io is v2 and requires authentication to query, so login in first like this:
 # docker login registry.redhat.io -u=USERNAME -p=PASSWORD
 
-if [[ ! -x /usr/bin/skopeo ]]; then 
-	echo "This script requires skopeo. Please install it."
-	exit 1
-fi
-
-if [[ ! -x /usr/bin/jq ]]; then 
-	echo "This script requires jq. Please install it."
-	exit 1
-fi
+command -v jq >/dev/null 2>&1 || { echo "jq is not installed. Aborting."; exit 1; }
+command -v skopeo >/dev/null 2>&1 || { echo "skopeo is not installed. Aborting."; exit 1; }
+checkVersion() {
+  if [[  "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]]; then
+    # echo "[INFO] $3 version $2 >= $1, can proceed."
+	true
+  else 
+    echo "[ERROR] Must install $3 version >= $1"
+    exit 1
+  fi
+}
+checkVersion 0.40 "$(skopeo --version | sed -e "s/skopeo version //")" skopeo
 
 QUIET=0 	# less output - omit container tag URLs
 VERBOSE=0	# more output
-WORKDIR=`pwd`
-BRANCH=crw-2.2-rhel-8 # not master
-DOCKERFILE="Dockerfile" # or "rhel.Dockerfile"
+WORKDIR=$(pwd)
+
+# try to compute branches from currently checked out branch; else fall back to hard coded value
+# where to find redhat-developer/codeready-workspaces/${SCRIPTS_BRANCH}/product/getLatestImageTags.sh
+SCRIPTS_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [[ $SCRIPTS_BRANCH != "crw-2."*"-rhel-8" ]]; then
+	SCRIPTS_BRANCH="crw-2-rhel-8"
+fi
+# where to find source branch to update, crw-2.y-rhel-8, 7.yy.x, etc.
+SOURCES_BRANCH=${SCRIPTS_BRANCH}
+
+DOCKERFILE="Dockerfile"
 MAXDEPTH=2
-PR_BRANCH="pr-master-new-base-images-$(date +%s)"
+PR_BRANCH="pr-update-base-images-$(date +%s)"
 OPENBROWSERFLAG="" # if a PR is generated, open it in a browser
 docommit=1 # by default DO commit the change
 dopush=1 # by default DO push the change
@@ -38,13 +52,13 @@ buildCommand="echo" # By default, no build will be triggered when a change occur
 
 checkrecentupdates () {
 	# set +e
-	for d in $(find ${WORKDIR} -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort); do
+	for d in $(find ${WORKDIR}/ -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort); do
 		pushdir=${d%/${DOCKERFILE}}
 		pushd ${pushdir} >/dev/null
 			last=$(git lg -1 | grep -v days || true)
 			if [[ $last = *[$' \t\n\r']* ]]; then 
 				echo "[DEBUG] ${pushdir##*/}"
-				echo "[DEBUG] $last" | egrep "seconds|minutes" || true
+				echo "[DEBUG] $last" | grep -E "seconds|minutes" || true
 				echo
 			fi
 		popd >/dev/null
@@ -54,11 +68,21 @@ checkrecentupdates () {
 
 usage () {
 	echo "Usage:   $0 -b [BRANCH] [-w WORKDIR] [-f DOCKERFILE] [-maxdepth MAXDEPTH]"
-	echo "Example: $0 -b crw-2.2-rhel-8 -w $(pwd) -f rhel.Dockerfile -maxdepth 2"
+	echo "Downstream Example: $0 -b ${SOURCES_BRANCH} -w \$(pwd) -f rhel.Dockerfile -maxdepth 2"
+	echo "Upstream Examples:
+
+$0 -b 7.yy.x -w dockerfiles/ -f \*from.dockerfile -maxdepth 5 -o # che-theia
+$0 -b master -w \$(pwd)      -f rhel.Dockerfile   -maxdepth 4 -o # che-plugin-broker
+$0 -b 7.yy.x -w \$(pwd)      -f Dockerfile        -maxdepth 1 --tag '1\.13|8\.[0-9]-' --no-commit # che-operator
+
+"
 	echo "Options: 
+	--sources-branch, -b    set sources branch (project to update), eg., 7.yy.x
+	--scripts-branch, -sb   set scripts branch (project with helper scripts), eg., crw-2.y-rhel-8
 	--no-commit, -n    do not commit to BRANCH
 	--no-push, -p      do not push to BRANCH
-	-prb               set a PR_BRANCH; default: pr-master-new-base-images-(timestamp)
+	--tag              regex match to restrict results, eg., '1\.13|8\.[0-9]-' to find golang 1.13 (not 1.14) and any ubi 8-x- tag
+	-prb               set a PR_BRANCH; default: pr-new-base-images-(timestamp)
 	-o                 open browser if PR generated
 	-q, -v             quiet, verbose output
 	--help, -h         help
@@ -70,16 +94,21 @@ usage () {
 
 if [[ $# -lt 1 ]]; then usage; exit; fi
 
+BASETAG="."
+EXCLUDES="latest|-source"
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     '-w') WORKDIR="$2"; shift 1;;
-    '-b') BRANCH="$2"; shift 1;;
+    '-b'|'--sources-branch') SOURCES_BRANCH="$2"; shift 1;;
+    '-sb'|'--scripts-branch') SCRIPTS_BRANCH="$2"; shift 1;;
+    '--tag') BASETAG="$2"; shift 1;; # rather than fetching latest tag, grab latest tag matching a pattern like "1.13"
+    '-x') EXCLUDES="$2"; shift 1;;
     '-f') DOCKERFILE="$2"; shift 1;;
     '-maxdepth') MAXDEPTH="$2"; shift 1;;
     '-c') buildCommand="rhpkg container-build"; shift 0;; # NOTE: will trigger a new build for each commit, rather than for each change set (eg., Dockefiles with more than one FROM)
     '-s') buildCommand="rhpkg container-build --scratch"; shift 0;;
-    '-n'|'--no-commit') docommit=0; dopush=0; shift 0;;
-    '-p'|'--no-push') dopush=0; shift 0;;
+    '-n'|'--nocommit'|'--no-commit') docommit=0; dopush=0; shift 0;;
+    '-p'|'--nopush'|'--no-push') dopush=0; shift 0;;
     '-prb') PR_BRANCH="$2"; shift 1;;
     '-o') OPENBROWSERFLAG="-o"; shift 0;;
     '-q') QUIET=1; shift 0;;
@@ -139,17 +168,27 @@ testvercomp () {
     fi
 }
 
+cherrypickLastCommit() {
+	cherryPickBranch=$1
+	lastCommit="$(git rev-parse HEAD)"
+	git branch ${cherryPickBranch} || true
+	git checkout ${cherryPickBranch} || true
+	git pull origin ${cherryPickBranch} || true
+	git cherry-pick $lastCommit || git commit --allow-empty -sm "${lastCommitComment}"
+	git push origin ${cherryPickBranch}
+}
+
 pushedIn=0
-for d in $(find ${WORKDIR} -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort); do
+for d in $(find ${WORKDIR}/ -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort -r); do
 	if [[ -f ${d} ]]; then
 		echo ""
 		echo "# Checking ${d} ..."
 		# pull latest commits
 		if [[ -d ${d%%/${DOCKERFILE}} ]]; then pushd ${d%%/${DOCKERFILE}} >/dev/null; pushedIn=1; fi
 		if [[ "${d%/${DOCKERFILE}}" == *"-rhel8" ]]; then
-			BRANCHUSED=${BRANCH/rhel-7/rhel-8}
+			BRANCHUSED=${SOURCES_BRANCH/rhel-7/rhel-8}
 		else
-			BRANCHUSED=${BRANCH}
+			BRANCHUSED=${SOURCES_BRANCH}
 		fi
 		git branch --set-upstream-to=origin/${BRANCHUSED} ${BRANCHUSED} -q || true
 		git checkout ${BRANCHUSED} -q || true 
@@ -165,10 +204,23 @@ for d in $(find ${WORKDIR} -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort); do
 			URL=${URL#registry.redhat.io/}
 			if [[ $VERBOSE -eq 1 ]]; then echo "[DEBUG] URL=$URL"; fi
 			if [[ $URL == "https"* ]]; then 
-				QUERY="$(echo $URL | sed -e "s#.\+\(registry.redhat.io\|registry.access.redhat.com\)/#skopeo inspect docker://registry.redhat.io/#g")"
-				if [[ ${QUIET} -eq 0 ]]; then echo "# $QUERY| jq .RepoTags| egrep -v \"\[|\]|latest|-source\"|sed -e 's#.*\"\(.\+\)\",*#- \1#'|sort -V|tail -5"; fi
+				# QUERY="$(echo $URL | sed -e "s#.\+\(registry.redhat.io\|registry.access.redhat.com\)/#skopeo inspect docker://registry.redhat.io/#g")"
+				# if [[ ${QUIET} -eq 0 ]]; then echo "# $QUERY| jq .RepoTags| grep -E -v \"\[|\]|latest|-source\"|sed -e 's#.*\"\(.\+\)\",*#- \1#'|sort -V|tail -5"; fi
+				# LATESTTAG=$(${QUERY} 2>/dev/null| jq .RepoTags|grep -E -v "\[|\]|latest|-source"|sed -e 's#.*\"\(.\+\)\",*#\1#'|sort -V|tail -1)
 				FROMPREFIX=$(echo $URL | sed -e "s#.\+registry.access.redhat.com/##g")
-				LATESTTAG=$(${QUERY} 2>/dev/null| jq .RepoTags|egrep -v "\[|\]|latest|-source"|sed -e 's#.*\"\(.\+\)\",*#\1#'|sort -V|tail -1)
+
+				# get getLatestImageTags script
+				# TODO CRW-1511 sometimes this returns a 404 instead of a valid script. Why?
+				if [[ ! -x /tmp/getLatestImageTags.sh ]]; then 
+					pushd /tmp >/dev/null || exit 1
+					glit=https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/${SCRIPTS_BRANCH}/product/getLatestImageTags.sh
+					if [[ $VERBOSE -eq 1 ]]; then echo "[DEBUG] Downloading $glit ..."; fi
+					curl -sSLO $glit && chmod +x getLatestImageTags.sh
+					popd >/dev/null || exit 1
+				fi
+				LATESTTAG=$(/tmp/getLatestImageTags.sh -c ${FROMPREFIX} -x "${EXCLUDES}" --tag "${BASETAG}")
+				LATESTTAG=${LATESTTAG##*:}
+
 				LATE_TAGver=${LATESTTAG%%-*} # 1.0
 				LATE_TAGrev=${LATESTTAG##*-} # 15.1553789946 or 15
 				LATE_TAGrevbase=${LATE_TAGrev%%.*} # 15
@@ -206,7 +258,7 @@ for d in $(find ${WORKDIR} -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort); do
 
 							# commit change and push it
 							if [[ -d ${d%%/${DOCKERFILE}} ]]; then pushd ${d%%/${DOCKERFILE}} >/dev/null; pushedIn=1; fi
-							set -x
+							# set -x
 							if [[ ${docommit} -eq 1 ]]; then 
 								git add ${DOCKERFILE} || true
 								git commit -s -m "[base] Update from ${URL} to ${FROMPREFIX}:${LATESTTAG}" ${DOCKERFILE}
@@ -216,17 +268,13 @@ for d in $(find ${WORKDIR} -maxdepth ${MAXDEPTH} -name ${DOCKERFILE} | sort); do
 
 									# shellcheck disable=SC2181
 									if [[ $? -gt 0 ]] || [[ $PUSH_TRY == *"protected branch hook declined"* ]]; then
-										# create pull request for master branch, as branch is restricted
-										git branch "${PR_BRANCH}" || true
-										git checkout "${PR_BRANCH}" || true
-										git pull origin "${PR_BRANCH}" || true
-										git push origin "${PR_BRANCH}"
+										# create pull request if target branch is restricted access
 										lastCommitComment="$(git log -1 --pretty=%B)"
+										cherrypickLastCommit "${PR_BRANCH}"
 										if [[ $(/usr/local/bin/hub version 2>/dev/null || true) ]] || [[ $(which hub 2>/dev/null || true) ]]; then
-											# collect additional commits in the same PR if it already exists 
-											{ hub pull-request -f -m "chore(base images) Update base image(s) to latest tag(s)
+											hub pull-request -f -m "${lastCommitComment}
 
-${lastCommitComment}" -b "${BRANCHUSED}" -h "${PR_BRANCH}" "${OPENBROWSERFLAG}"; } || { git merge master; git push origin "${PR_BRANCH}"; }
+${lastCommitComment}" -b "${BRANCHUSED}" -h "${PR_BRANCH}" "${OPENBROWSERFLAG}" || true 
 										else
 											echo "# Warning: hub is required to generate pull requests. See https://hub.github.com/ to install it."
 											echo -n "# To manually create a pull request, go here: "

@@ -10,17 +10,14 @@
 #
 
 # https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/ubi8-minimal
-FROM registry.access.redhat.com/ubi8-minimal:8.2-345
+FROM registry.access.redhat.com/ubi8-minimal:8.3-298.1618432845
 USER root
 ENV CHE_HOME=/home/user/codeready
 ENV JAVA_HOME=/usr/lib/jvm/jre
 RUN microdnf install java-11-openjdk-headless tar gzip shadow-utils findutils && \
     microdnf update -y gnutls && \
     microdnf -y clean all && rm -rf /var/cache/yum && echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages" && \
-    adduser -G root user && mkdir -p /home/user/codeready && \
-    # copy cacert to home dir - see file references in entrypoint.sh
-    cp /etc/pki/ca-trust/extracted/java/cacerts /home/user/cacerts
-
+    adduser -G root user && mkdir -p /home/user/codeready
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
@@ -36,8 +33,6 @@ RUN mkdir /logs /data && \
     chown -R user /home/user && \
     chmod -R g+rwX /home/user && \
     find /home/user -type d -exec chmod 777 {} \; && \
-    # set group write permission so that entrypoint.sh can update permissions once file is updated w/ new cert
-    chmod 777 /home/user/cacerts && \
     java -version && echo -n "Server startup script in: " && \
     find /home/user/codeready -name catalina.sh | grep -z /home/user/codeready/tomcat/bin/catalina.sh
 

@@ -7,21 +7,23 @@ displayName: Language Support for Java 8
 title: Language Support for Java(TM) by Red Hat
 description: Java Linting, Intellisense, formatting, refactoring, Maven/Gradle support
   and more...
-icon: https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/dependencies/che-plugin-registry/resources/images/default.svg?sanitize=true
+icon: /v3/images/redhat-java-icon.png
 repository: https://github.com/redhat-developer/vscode-java
 category: Language
 firstPublicationDate: "2020-07-26"
 spec:
   containers:
-  - image: "registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.3"
+  - image: "registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.8"
     name: vscode-java
-    memoryLimit: "1500Mi"
+    memoryLimit: 1500Mi
+    cpuLimit: 500m
+    cpuRequest: 30m
     args:
       - sh
       - -c
       - ${PLUGIN_REMOTE_ENDPOINT_EXECUTABLE}
     volumes:
-    - mountPath: "/home/theia/.m2"
+    - mountPath: "/home/jboss/.m2"
       name: m2
   extensions:
     - https://download.jboss.org/jbosstools/vscode/3rdparty/vscode-java-debug/vscode-java-debug-0.26.0.vsix

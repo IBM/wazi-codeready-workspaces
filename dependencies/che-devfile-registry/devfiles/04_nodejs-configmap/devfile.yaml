@@ -5,27 +5,25 @@ metadata:
 projects:
   - name: nodejs-configmap
     source:
-      location: "https://github.com/nodeshift-starters/nodejs-configmap"
+      location: "https://github.com/crw-samples/nodejs-configmap.git"
       type: git
-      branch: master
+      branch: 12.x
 components:
-  - id: che-incubator/typescript/latest
+  - id: vscode/typescript-language-features/latest
     type: chePlugin
-    memoryLimit: 512Mi
   - type: chePlugin
     id: ms-vscode/node-debug2/latest
   - mountSources: true
-    memoryLimit: 1Gi
     type: dockerimage
+    memoryLimit: 1Gi
     alias: nodejs
-    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.3
+    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.8
     endpoints:
       - name: "nodejs"
         port: 8080
   - id: redhat/vscode-openshift-connector/latest
     type: chePlugin
     alias: openshift-connector
-    memoryLimit: 1280Mi
 commands:
   - name: 1. Install dependencies
     actions:

@@ -6,7 +6,7 @@ type: Che Editor
 displayName: theia-ide
 title: Eclipse Theia
 description: Eclipse Theia
-icon: https://raw.githubusercontent.com/redhat-developer/codeready-workspaces/master/dependencies/che-plugin-registry/resources/images/default.svg?sanitize=true
+icon: /v3/images/eclipse-che-logo.png
 category: Editor
 repository: https://github.com/eclipse/che-theia
 firstPublicationDate: "2020-03-17"
@@ -27,6 +27,16 @@ spec:
       attributes:
         protocol: http
         type: webview
+        secure: true
+        cookiesAuthEnabled: true
+        discoverable: false
+        unique: true
+   -  name: "mini-browser"
+      public: true
+      targetPort: 3100
+      attributes:
+        protocol: http
+        type: mini-browser
         secure: true
         cookiesAuthEnabled: true
         discoverable: false
@@ -56,32 +66,51 @@ spec:
       attributes:
         protocol: http
         discoverable: false
+   - name: terminal
+     public: true
+     targetPort: 3333
+     attributes:
+       protocol: ws
+       type: collocated-terminal
+       discoverable: false
+       secure: true
+       cookiesAuthEnabled: true
   containers:
-   - name: theia-ide
-     image: "registry.redhat.io/codeready-workspaces/theia-rhel8:2.3"
-     env:
-         - name: THEIA_PLUGINS
-           value: local-dir:///plugins
-         - name: HOSTED_PLUGIN_HOSTNAME
-           value: 0.0.0.0
-         - name: HOSTED_PLUGIN_PORT
-           value: "3130"
-         - name: THEIA_HOST
-           value: 127.0.0.1
-     volumes:
-         - mountPath: "/plugins"
-           name: plugins
-     mountSources: true
-     ports:
-         - exposedPort: 3100
-         - exposedPort: 3130
-         - exposedPort: 13131
-         - exposedPort: 13132
-         - exposedPort: 13133
-     memoryLimit: "512M"
+  - name: theia-ide
+    image: "registry.redhat.io/codeready-workspaces/theia-rhel8:2.8"
+    env:
+        - name: THEIA_PLUGINS
+          value: local-dir:///plugins
+        - name: HOSTED_PLUGIN_HOSTNAME
+          value: 0.0.0.0
+        - name: HOSTED_PLUGIN_PORT
+          value: "3130"
+        - name: THEIA_HOST
+          value: 127.0.0.1
+    volumes:
+        - mountPath: "/plugins"
+          name: plugins
+    mountSources: true
+    ports:
+        - exposedPort: 3100
+        - exposedPort: 3130
+        - exposedPort: 13131
+        - exposedPort: 13132
+        - exposedPort: 13133
+    memoryLimit: 512M
+    cpuLimit: 1500m
+    cpuRequest: 100m
+  - name: che-machine-exec
+    image: 'registry.redhat.io/codeready-workspaces/machineexec-rhel8:2.8'
+    ports:
+      - exposedPort: 3333
+    command:
+      - /go/bin/che-machine-exec
+      - '--url'
+      - '127.0.0.1:3333'
   initContainers:
   - name: remote-runtime-injector
-    image: registry.redhat.io/codeready-workspaces/theia-endpoint-rhel8:2.3
+    image: registry.redhat.io/codeready-workspaces/theia-endpoint-rhel8:2.8
     volumes:
       - mountPath: "/remote-endpoint"
         name: remote-endpoint

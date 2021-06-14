@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2012-2019 Red Hat, Inc.
+# Copyright (c) 2012-2020 Red Hat, Inc.
 # This program and the accompanying materials are made
 # available under the terms of the Eclipse Public License 2.0
 # which is available at https://www.eclipse.org/legal/epl-2.0/
@@ -229,11 +229,11 @@ init() {
 
   if [ -z "$CHE_HOME" ]; then
     if [ -f "/assembly/tomcat/bin/catalina.sh" ]; then
-      echo "Found custom assembly in /assembly"
       export CHE_HOME="/assembly"
+      echo "Found custom assembly in ${CHE_HOME}"
     else
-      echo "Using embedded assembly."
       export CHE_HOME=$(echo /home/user/eclipse-che/)
+      echo "Using embedded assembly in ${CHE_HOME}."
     fi
   else
     export CHE_HOME=$(echo ${CHE_HOME})
@@ -260,7 +260,6 @@ init() {
   fi
 
   [ -z "$CHE_DATABASE" ] && export CHE_DATABASE=${CHE_DATA}/storage
-  [ -z "$CHE_TEMPLATE_STORAGE" ] && export CHE_TEMPLATE_STORAGE=${CHE_DATA}/templates
 
   perform_database_migration
 
@@ -280,7 +279,6 @@ init() {
     rm -rf "${CHE_DATA}"/stacks
   fi
 
-
   # A che property, which names the Docker network used for che + ws to communicate
   if [ -z "$CHE_DOCKER_NETWORK" ]; then
     NETWORK_NAME="bridge"
@@ -291,7 +289,7 @@ init() {
 }
 
 add_cert_to_truststore() {
-  DEFAULT_JAVA_TRUST_STORE=$JAVA_HOME/lib/security/cacerts
+  DEFAULT_JAVA_TRUST_STORE=${JAVA_HOME}/lib/security/cacerts
   DEFAULT_JAVA_TRUST_STOREPASS="changeit"
 
   JAVA_TRUST_STORE=/home/user/cacerts
@@ -307,12 +305,20 @@ add_cert_to_truststore() {
 
   echo "$1" > $SELF_SIGNED_CERT
 
-  # make sure that everyone has permission to write
+  # make sure that owner has permissions to write and other groups have permissions to read
+  chmod 644 "$JAVA_TRUST_STORE"
+
   echo yes | keytool -keystore $JAVA_TRUST_STORE -importcert -alias "$2" -file $SELF_SIGNED_CERT -storepass $DEFAULT_JAVA_TRUST_STOREPASS > /dev/null
-  # allow only read by all groups: note that this might not work when running as anyuid OpenShift user, which is why we're forcing a true if it fails
-  chmod 444 $JAVA_TRUST_STORE || true
-  if [[ "$JAVA_OPTS" != *"-Djavax.net.ssl.trustStore"* && "$JAVA_OPTS" != *"-Djavax.net.ssl.trustStorePassword"* ]]; then
-    export JAVA_OPTS="${JAVA_OPTS} -Djavax.net.ssl.trustStore=$JAVA_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$DEFAULT_JAVA_TRUST_STOREPASS"
+  # set read-only permissions on keystore file
+  chmod 444 "$JAVA_TRUST_STORE"
+  set_truststore_system_variables "$JAVA_TRUST_STORE" "$DEFAULT_JAVA_TRUST_STOREPASS"
+}
+
+set_truststore_system_variables() {
+  KEYSTORE_PATH=$1
+  KEYSTORE_PASSWORD=$2
+   if [[ "$JAVA_OPTS" != *"-Djavax.net.ssl.trustStore"* && "$JAVA_OPTS" != *"-Djavax.net.ssl.trustStorePassword"* ]]; then
+    export JAVA_OPTS="${JAVA_OPTS} -Djavax.net.ssl.trustStore=$KEYSTORE_PATH -Djavax.net.ssl.trustStorePassword=$KEYSTORE_PASSWORD"
   fi
 }
 
@@ -322,15 +328,67 @@ add_che_cert_to_truststore() {
   fi
 }
 
-add_public_cert_to_truststore() {
+add_public_certs_to_truststore() {
+  JAVA_TRUST_STORE=/home/user/cacerts
+  DEFAULT_JAVA_TRUST_STORE=${JAVA_HOME}/lib/security/cacerts
+  DEFAULT_JAVA_TRUST_STOREPASS="changeit"
+
+  if [ ! -f "$JAVA_TRUST_STORE" ]; then
+    cp "$DEFAULT_JAVA_TRUST_STORE" "$JAVA_TRUST_STORE"
+  fi
+
+  chmod 644 "$JAVA_TRUST_STORE"
+
   CUSTOM_PUBLIC_CERTIFICATES="/public-certs"
   if [[ -d "$CUSTOM_PUBLIC_CERTIFICATES" && -n "$(find $CUSTOM_PUBLIC_CERTIFICATES -type f)" ]]; then
     FILES="$CUSTOM_PUBLIC_CERTIFICATES/*"
     for cert in $FILES
     do
-      add_cert_to_truststore "$(<$cert)" "HOSTDOMAIN-$(basename $cert)"
+      jks_import_ca_bundle "$cert" "$JAVA_TRUST_STORE" "$DEFAULT_JAVA_TRUST_STOREPASS"
     done
   fi
+
+  chmod 444 "$JAVA_TRUST_STORE"
+  set_truststore_system_variables "$JAVA_TRUST_STORE" "$DEFAULT_JAVA_TRUST_STOREPASS"
+}
+
+function jks_import_ca_bundle {
+  CA_FILE=$1
+  KEYSTORE_PATH=$2
+  KEYSTORE_PASSWORD=$3
+
+  if [ ! -f "$CA_FILE" ]; then
+    # CA bundle file doesn't exist, skip it
+    echo "Failed to import CA certificates from ${CA_FILE}. File doesn't exist"
+    return
+  fi
+
+  bundle_name=$(basename "$CA_FILE")
+  certs_imported=0
+  cert_index=0
+  tmp_file=/tmp/cert.pem
+  is_cert=false
+  while IFS= read -r line; do
+    if [ "$line" == "-----BEGIN CERTIFICATE-----" ]; then
+      # Start copying a new certificate
+      is_cert=true
+      cert_index=$((cert_index+1))
+      # Reset destination file and add header line
+      echo "$line" > ${tmp_file}
+    elif [ "$line" == "-----END CERTIFICATE-----" ]; then
+      # End of the certificate is reached, add it to trust store
+      is_cert=false
+      echo "$line" >> ${tmp_file}
+      keytool -importcert -alias "${bundle_name}_${cert_index}" -keystore "$KEYSTORE_PATH" -file $tmp_file -storepass "$KEYSTORE_PASSWORD" -noprompt && \
+      certs_imported=$((certs_imported+1))
+    elif [ "$is_cert" == true ]; then
+      # In the middle of a certificate, copy line to target file
+      echo "$line" >> ${tmp_file}
+    fi
+  done < "$CA_FILE"
+  echo "Imported ${certs_imported} certificates from ${CA_FILE}"
+  # Clean up
+  rm -f $tmp_file
 }
 
 get_che_data_from_host() {
@@ -393,7 +451,7 @@ init
 init_global_variables
 set_environment_variables
 add_che_cert_to_truststore
-add_public_cert_to_truststore
+add_public_certs_to_truststore
 
 # run che
 start_che_server &

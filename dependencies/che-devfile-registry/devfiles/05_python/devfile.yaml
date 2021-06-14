@@ -13,12 +13,11 @@ components:
     type: chePlugin
     id: ms-python/python/latest
     preferences:
-      python.globalModuleInstallation: true
-    memoryLimit: 512Mi
+      python.globalModuleInstallation: false
   -
     type: dockerimage
     alias: python
-    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.3
+    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.8
     memoryLimit: 512Mi
     mountSources: true
 commands:
@@ -47,4 +46,3 @@ commands:
             }
           ]
         }
-

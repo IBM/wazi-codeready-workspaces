@@ -1,0 +1,51 @@
+#
+# Copyright IBM Corporation 2020-2021
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+# Contributors:
+#   IBM Corporation - implementation
+#
+
+apiVersion: 1.0.0
+metadata:
+    generateName: wazidev-
+projects:
+  - name: zopeneditor-sample
+    source:
+      type: git
+      location: "https://github.com/IBM/zopeneditor-sample.git"
+      branch: wazi-master
+attributes:
+  extensions.ignoreRecommendations: 'true'
+components:
+- type: chePlugin
+  id: ibm/wazi-developer/latest
+  alias: wazi-developer
+  preferences:
+    Zowe-Temp-Folder-Location: '{"folderPath": "/projects"}'
+    zopeneditor.propertygroups: '[{"name":"SAM-Copybooks","type":"local","syslib":["**/COPYBOOK","**/INCLUDES","**/ASMCOPY"],"libraries":[{"name":"MYFILE","locations":["**/COPYLIB","**/INCLUDELIB"]}]},{"name":"MVS-Cobol-lib","type":"mvs","language":"cobol","syslib":["IBMUSER.SAMPLE.COBCOPY"],"libraries":[{"name":"MYLIB","locations":["IBMUSER.SAMPLE.COPYLIB"]}]},{"name":"MVS-PL1-lib","type":"mvs","language":"pl1","syslib":["IBMUSER.SAMPLE.PLINC"],"libraries":[{"name":"MYLIB","locations":["IBMUSER.SAMPLE.PLI.INCLLIB"]}]}]'
+    zopeneditor.userbuild.workspaceSettings: '{"dbb":{"command":"$DBB_HOME/bin/groovyz -DBB_PERSONAL_DAEMON","commandArgs":[],"buildScriptPath":"${zopeneditor.userbuild.userSettings.dbbWorkspace}/dbb-zappbuild/build.groovy","buildScriptArgs":["--userBuild","--workspace ${zopeneditor.userbuild.userSettings.dbbWorkspace}","--application zopeneditor-sample","--hlq ${zopeneditor.userbuild.userSettings.dbbHlq}","--outDir ${zopeneditor.userbuild.userSettings.dbbWorkspace}/zopeneditor-sample/logs"],"additionalDependencies":["application-conf"]}}'
+    zopeneditor.userbuild.userSettings: '{"dbbWorkspace":"/u/ibmuser/projects","dbbHlq":"IBMUSER.DBB","dbbLogDir":"/u/ibmuser/projects/zopeneditor-sample/logs","localWorkspacePath":"/projects/zopeneditor-sample"}'
+    zopendebug.connection.connectionName: 'wazi-sandbox-server-ip'
+    zopendebug.connection.connectionPort: 32448
+    zopendebug.connection.userName: 'ibmuser'
+- type: chePlugin
+  id: ibm/wazi-debug/latest
+  alias: wazi-debug
+- type: chePlugin
+  id: redhat/vscode-yaml/latest
+  alias: vscode-yaml
+- type: dockerimage
+  alias: wazi-terminal
+  image: docker.io/ibmcom/wazi-code-codeready:latest
+  memoryLimit: 512Mi
+  volumes:
+    - name: zowe
+      containerPath: /home/wazi/.zowe
+    - name: m2
+      containerPath: /home/wazi/.m2
+  mountSources: true

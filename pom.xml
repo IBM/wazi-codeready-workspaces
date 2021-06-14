@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright (c) 2019-2020 Red Hat, Inc.
+    Copyright (c) 2018-2021 Red Hat, Inc.
     This program and the accompanying materials are made
     available under the terms of the Eclipse Public License 2.0
     which is available at https://www.eclipse.org/legal/epl-2.0/
@@ -21,7 +21,7 @@
     </parent>
     <groupId>com.redhat</groupId>
     <artifactId>codeready</artifactId>
-    <version>2.3.0.GA</version>
+    <version>2.8.0.GA</version>
     <packaging>pom</packaging>
     <name>CRW :: Parent</name>
     <url>https://developers.redhat.com/products/codeready-workspaces/overview/</url>
@@ -34,7 +34,6 @@
     </licenses>
     <modules>
         <module>assembly</module>
-        <module>test</module>
     </modules>
     <properties>
         <che.dashboard.version>${che.version}</che.dashboard.version>
@@ -42,11 +41,11 @@
             IMPORTANT! when bumping this version, remember to add machine exec and theia plugins to the registry with 
             cd dependencies/che-plugin-registry; ./build/scripts/add_che_plugins.sh
         -->
-        <che.version>7.16.2</che.version>
+        <che.version>7.28.3</che.version>
         <crw.dashboard.version>${crw.version} (Eclipse Che ${che.version})</crw.dashboard.version>
-        <crw.docs.version>2.3</crw.docs.version>
+        <crw.docs.version>2.8</crw.docs.version>
         <crw.version>${project.version}</crw.version>
-        <license_years>2019-2020</license_years>
+        <license_years>2018-2021</license_years>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <nightly>false</nightly>
@@ -55,7 +54,7 @@
         <dependencies>
             <dependency>
                 <groupId>org.eclipse.che</groupId>
-                <artifactId>che-parent</artifactId>
+                <artifactId>che-server</artifactId>
                 <version>${che.version}</version>
                 <type>pom</type>
                 <scope>import</scope>

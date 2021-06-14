@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# Copyright (c) 2020-2021 Red Hat, Inc.
+# This program and the accompanying materials are made
 # available under the terms of the Eclipse Public License 2.0
 # which is available at https://www.eclipse.org/legal/epl-2.0/
 #
@@ -9,11 +12,12 @@
 SCRIPT_DIR=$(cd "$(dirname "$0")" || exit; pwd)
 YAML_ROOT="$1"
 
-if [[ "$(uname -m)" == "x86_64" ]] ; then
-  exit 0
-fi
+devfiles=$($SCRIPT_DIR/list_yaml.sh "$YAML_ROOT")
 
-readarray -d '' devfiles < <($SCRIPT_DIR/list_yaml.sh "$YAML_ROOT" | tr '\n' '\0')
-sed -E -i 's|(.*image: *"?).*jboss-eap-7-eap-xp1-openjdk11-openshift-rhel8[^"]*("?)|\1registry-proxy.engineering.redhat.com/rh-osbs/jboss-eap-7-eap73-openj9-11-openshift-rhel8:7.3.0\2|g' ${devfiles[@]}
-sed -E -i 's|(.*image: *"?).*jboss-eap-7-eap-xp1-openjdk8-openshift-rhel7:1.0[^"]*("?)|\1registry-proxy.engineering.redhat.com/rh-osbs/jboss-eap-7-eap73-openj9-11-openshift-rhel8:7.3.0\2|g' ${devfiles[@]}  # all plugins, not fuse
-sed -E -i 's|(.*value: *"?).*sso74-openshift-rhel8:7.4[^"]*("?)|\1registry-proxy.engineering.redhat.com/rh-osbs/sso74-openj9-openshift-rhel8:7.4\2|g' ${devfiles[@]}
+# Note: optional -f flag will force this transformation even on an incompatible architecture,
+# so we can call this script from crw-operator/build/scripts/insert-related-images-to-csv.sh
+if [[ "$(uname -m)" != "x86_64" ]] || [[ "$2" == "-f" ]]; then 
+    sed -E -i 's|plugin-java8-rhel8|plugin-java8-openj9-rhel8|g' $devfiles
+    sed -E -i 's|plugin-java11-rhel8|plugin-java11-openj9-rhel8|g' $devfiles
+    sed -E -i 's|eap-xp2-openjdk11-openshift-rhel8:.*|eap-xp2-openj9-11-openshift-rhel8:2.0|g' $devfiles
+fi
