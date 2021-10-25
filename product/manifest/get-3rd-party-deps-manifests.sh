@@ -117,8 +117,8 @@ sed -e "s#.\+<package id=\"\(.\+\)\" version=\"\(.\+\)\".\+#${prefix}\1:\2#g" | 
 
 function phpList() {
 	prefix="$1"
-	for dep in $(php composer.phar show -t | sed -e "s#|^# || ^#g" -e "s#\(.\+\) PHP .\+#\1#g" -e "s#[\`-├└─┬-]\+##g" -e "s#\^[\ \t]\+##" -e "s#[\ \t]*\([a-z/]\+\) \([0-9.]\+\)#\1:\2#g" | sort | uniq); do
-		echo "$prefix$dep" >> ${MANIFEST_FILE}
+	for dep in $(php composer.phar show -f json | jq -r '.installed[] | [.name,.version] | @csv' | tr -d "\""); do
+		echo "$prefix${dep/,/:}" >> ${MANIFEST_FILE}
 	done
 }
 
@@ -150,10 +150,12 @@ rm -f ${LOG_FILE} ${MANIFEST_FILE}
 if [[ ${phases} == *"1"* ]] || [[ ${phases} == *"2"* ]] || [[ ${phases} == *"3"* ]] || [[ ${phases} == *"4"* ]] || [[ ${phases} == *"5"* ]] || [[ ${phases} == *"6"* ]]; then
 	log "1a. Check out 3rd party language server dependencies builder repo (will collect variables later)" 
 	cd /tmp
-	if [[ ! -d codeready-workspaces-deprecated ]]; then 
-	git clone git@github.com:redhat-developer/codeready-workspaces-deprecated.git
+	if [[ ! -d codeready-workspaces-deprecated ]]; then
+		git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/redhat-developer/codeready-workspaces-deprecated.git
 	fi
 	pushd codeready-workspaces-deprecated >/dev/null
+		git config --global push.default matching
+		git config --global hub.protocol https
 		git checkout ${CRW_BRANCH_TAG} || { echo "Tag or branch ${CRW_BRANCH_TAG} does not exist! Create it before running this script."; exit 1; }
 	popd >/dev/null
 	log ""
@@ -166,33 +168,34 @@ if [[ ${phases} == *"1"* ]]; then
 	codeready-workspaces-configbump \
 	codeready-workspaces-operator \
 	codeready-workspaces-operator-metadata \
+	codeready-workspaces-dashboard \
 	codeready-workspaces-devfileregistry \
-	codeready-workspaces-devworkspace-controller \
 	\
+	codeready-workspaces-devworkspace-controller \
 	codeready-workspaces-devworkspace \
 	codeready-workspaces-imagepuller \
 	codeready-workspaces-jwtproxy \
 	codeready-workspaces-machineexec \
-	codeready-workspaces-pluginbroker-artifacts \
 	\
+	codeready-workspaces-pluginbroker-artifacts \
 	codeready-workspaces-pluginbroker-metadata \
 	codeready-workspaces-plugin-java11-openj9 \
 	codeready-workspaces-plugin-java11 \
 	codeready-workspaces-plugin-java8-openj9 \
-	codeready-workspaces-plugin-java8 \
 	\
+	codeready-workspaces-plugin-java8 \
 	codeready-workspaces-plugin-kubernetes \
 	codeready-workspaces-plugin-openshift \
 	codeready-workspaces-pluginregistry \
 	codeready-workspaces \
-	codeready-workspaces-stacks-cpp \
 	\
+	codeready-workspaces-stacks-cpp \
 	codeready-workspaces-stacks-dotnet \
 	codeready-workspaces-stacks-golang \
 	codeready-workspaces-stacks-php \
 	codeready-workspaces-theia-dev \
-	codeready-workspaces-theia-endpoint \
 	\
+	codeready-workspaces-theia-endpoint \
 	codeready-workspaces-theia \
 	codeready-workspaces-traefik \
 	; do
@@ -361,11 +364,9 @@ if [[ ${phases} == *"4"* ]]; then
 	log ""
 	php composer.phar require -d /tmp/php-deps-tmp felixfbecker/language-server:${PHP_LS_VERSION} | tee -a ${LOG_FILE}
 	# php composer.phar run-script --working-dir=vendor/felixfbecker/language-server parse-stubs # does not install new deps, so don't need to run this
-	php composer.phar show -t >> ${LOG_FILE}
-	log ""
 	php composer.phar show >> ${LOG_FILE}
 	mnf "codeready-workspaces-stacks-php-container:${CSV_VERSION}/jetbrains/phpstorm-stubs:dev-master"
-	mnf "codeready-workspaces-stacks-php-container:${CSV_VERSION}/felixfbecker/language-server:${PHP_LS_VERSION}"
+	mnf "codeready-workspaces-stacks-php-container:${CSV_VERSION}/felixfbecker/language-server:v${PHP_LS_VERSION}"
 	phpList "  codeready-workspaces-stacks-php-container:${CSV_VERSION}/"
 	mnf ""
 	cd /tmp

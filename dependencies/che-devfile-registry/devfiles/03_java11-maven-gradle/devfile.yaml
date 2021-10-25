@@ -6,9 +6,10 @@ projects:
   -
     name: validating-form-input
     source:
-      type: git
       location: "https://github.com/crw-samples/gs-validating-form-input.git"
-      sparseCheckoutDir: complete
+      branch: master
+      type: git
+      sparseCheckoutDir: "complete"
 components:
   -
     type: chePlugin
@@ -18,7 +19,7 @@ components:
   -
     type: dockerimage
     alias: gradle
-    image: registry.redhat.io/codeready-workspaces/plugin-java11-rhel8:2.8
+    image: registry.redhat.io/codeready-workspaces/plugin-java11-rhel8:2.10
     env:
       - name: GRADLE_USER_HOME
         value: /home/jboss/.gradle

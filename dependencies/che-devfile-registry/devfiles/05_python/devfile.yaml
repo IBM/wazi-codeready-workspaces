@@ -6,18 +6,19 @@ projects:
   -
     name: python-hello-world
     source:
-      type: git
       location: "https://github.com/che-samples/python-hello-world.git"
+      branch: master
+      type: git
 components:
   -
     type: chePlugin
     id: ms-python/python/latest
     preferences:
-      python.globalModuleInstallation: false
+      python.globalModuleInstallation: true
   -
     type: dockerimage
     alias: python
-    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.8
+    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.10
     memoryLimit: 512Mi
     mountSources: true
 commands:

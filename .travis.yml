@@ -6,13 +6,13 @@ services:
 - docker
 env:
   global:
-  - IMAGE_DEVFILE="docker.io/ibmcom/wazi-code-dev-file"
-  - IMAGE_PLUGIN="docker.io/ibmcom/wazi-code-plugin"
+  - IMAGE_DEVFILE="icr.io/wazi-code/ibm-wazi-developer-for-workspaces-dev-file"
+  - IMAGE_PLUGIN="icr.io/wazi-code/ibm-wazi-developer-for-workspaces-plugin"
   - PLUGIN_DOCKERFILE="./dependencies/che-plugin-registry/build/dockerfiles/Dockerfile"
   - DEVFILE_DOCKERFILE="./dependencies/che-devfile-registry/build/dockerfiles/Dockerfile"
 install: 
-  - docker build -t ${IMAGE_DEVFILE}:travis -f ${DEVFILE_DOCKERFILE} --build-arg "PATCHED_IMAGES_TAG=7.14.0-SNAPSHOT" --target "registry" ./dependencies/che-devfile-registry/
-  - docker build -t ${IMAGE_PLUGIN}:travis -f ${PLUGIN_DOCKERFILE} --build-arg "PATCHED_IMAGES_TAG=7.28.3" --target "registry" ./dependencies/che-plugin-registry/
+  - docker build -t ${IMAGE_DEVFILE}:travis -f ${DEVFILE_DOCKERFILE} --build-arg "PATCHED_IMAGES_TAG=7.14.0-SNAPSHOT" --build-arg "USE_DIGESTS=false" --target "registry" ./dependencies/che-devfile-registry/
+  - docker build -t ${IMAGE_PLUGIN}:travis -f ${PLUGIN_DOCKERFILE} --target "registry" ./dependencies/che-plugin-registry/
 script: echo "Success!"
 notifications:
   slack: ibm-systems-z:kiD2FZtJUJtUSp57dwHWwNX1

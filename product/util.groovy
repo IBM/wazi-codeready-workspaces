@@ -34,7 +34,21 @@ def String getJobBranch(String MIDSTM_BRANCH) {
   return JOB_BRANCH
 }
 
+@Field boolean BOOTSTRAPPED_F = false
+
+// method to check for global var or job param; if not set, return nullstring and throw no MissingPropertyException
+// thanks to https://stackoverflow.com/questions/42465028/how-can-i-determine-if-a-variable-exists-from-within-the-groovy-code-running-in
+// Usage: globalVar({nodeVersion}) <-- braces are required
+def globalVar(varNameExpr) {
+  try {
+    varNameExpr() // return value of the string if defined by global var or job param
+  } catch (exc) {
+    "" // return nullstring if not defined
+  }
+}
+
 def installMaven(String MAVEN_VERSION, String JAVA_VERSION){
+  installRPMs("java-"+JAVA_VERSION+"-openjdk java-"+JAVA_VERSION+"-openjdk-devel")
   mURL="https://www.apache.org/dyn/mirrors/mirrors.cgi?action=download&filename=maven/maven-3/" + MAVEN_VERSION + "/binaries/apache-maven-" + MAVEN_VERSION + "-bin.tar.gz"
   sh('''#!/bin/bash -xe
     if [[ ! -x /opt/apache-maven/bin/mvn ]]; then 
@@ -54,11 +68,27 @@ def installMaven(String MAVEN_VERSION, String JAVA_VERSION){
  sh("mvn -v")
 }
 
-// TODO https://issues.redhat.com/browse/CRW-360 - eventually we should use RH npm mirror
-def installNPM(String nodeVersion, String yarnVersion) {
-  installNPM(nodeVersion, yarnVersion, false)
+def getTheiaBuildParam(String property) { 
+  return getVarFromPropertiesFileURL(property, "https://raw.githubusercontent.com/redhat-developer/codeready-workspaces-theia/"+MIDSTM_BRANCH+"/BUILD_PARAMS")
 }
-def installNPM(String nodeVersion, String yarnVersion, boolean installP7zip) {
+
+// load a property from a remote file, eg., nodeVersion=12.21.0 or yarnVersion=1.21.1 from 
+// https://github.com/redhat-developer/codeready-workspaces-theia/blob/crw-2-rhel-8/BUILD_PARAMS
+def getVarFromPropertiesFileURL(String property, String tURL) {
+  def data = tURL.toURL().readLines()
+  varVal=""
+  data.each {
+    pair=it.toString().trim()
+    if (pair.matches(property+"=.+")) {
+      varVal=pair.replaceAll(property+"=","")
+      return true
+    }
+  }
+  return varVal
+}
+
+// TODO https://issues.redhat.com/browse/CRW-360 - eventually we should use RH npm mirror
+def installNPM(String nodeVersion, String yarnVersion, boolean installP7zip=false, boolean installNodeGyp=false) {
   USE_PUBLIC_NEXUS = true
 
   sh '''#!/bin/bash -e
@@ -94,15 +124,9 @@ if [[ -x /usr/bin/7za ]]; then pushd ''' + nodeHome + ''' >/dev/null; sudo rm -f
 '''
   }
 
-  sh '''#!/bin/bash -xe
-rm -f ${HOME}/.npmrc ${HOME}/.yarnrc
-npm install --global yarn@''' + yarnVersion + '''
-node --version && npm --version; yarn --version
-'''
-
   sh "echo USE_PUBLIC_NEXUS = ${USE_PUBLIC_NEXUS}"
   if (!USE_PUBLIC_NEXUS) {
-      sh '''#!/bin/bash -xe
+    sh '''#!/bin/bash -xe
 echo '
 registry=https://repository.engineering.redhat.com/nexus/repository/registry.npmjs.org/
 cafile=/etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt
@@ -121,19 +145,29 @@ strict-ssl false
 cat ${HOME}/.npmrc
 cat ${HOME}/.yarnrc
 
-npm install --global yarn@''' + yarnVersion + '''
+npm install --global --silent yarn@''' + yarnVersion + '''
 npm config get; yarn config get list
 npm --version; yarn --version
 '''
   }
   else
   {
-        sh '''#!/bin/bash -xe
+    sh '''#!/bin/bash -xe
 rm -f ${HOME}/.npmrc ${HOME}/.yarnrc
-npm install --global yarn@''' + yarnVersion + '''
+npm install --global --silent yarn@''' + yarnVersion + '''
 node --version; npm --version; yarn --version
 '''
   }
+
+  // used by theia-dev build
+  if (installNodeGyp) {
+    installRPMs("libsecret-devel make gcc-c++")
+    sh '''#!/bin/bash -e
+    npm install --global --silent node-gyp
+    node-gyp --version
+'''
+  }
+
 }
 
 def installYq() {
@@ -161,7 +195,7 @@ def updatePodman(boolean usePulpRepos=true) {
   if (usePulpRepos) { enablePulpRepos() }
   sh('''#!/bin/bash -xe
 echo "[INFO] Installing podman with docker emulation ..."
-sudo yum -y -q module install container-tools
+sudo yum -y -q module install container-tools || true
   ''')
   installRPMs("fuse3 podman podman-docker")
   sh('''#!/bin/bash -xe
@@ -268,7 +302,7 @@ EOF
 
 // workaround for performance issues in CRW-1610
 def yumConf() {
-  sh '''#!/bin/bash -xe
+  sh '''#!/bin/bash -e
 cat <<EOF | sudo tee /etc/yum.conf
 [main]
 gpgcheck=0
@@ -286,6 +320,7 @@ sudo yum install -yq drpm dnf || exit 1 # enable delta rpms
 
 # mark repos with skip_if_unavailable=True so we don't die if built in repos (like epel) can't be resolved today
 for r in $(find /etc/yum.repos.d/ -name "*.repo"); do
+  echo "Skip if unavailable: $r"
   sudo sed -i ${r} -r -e "s#skip_if_unavailable=False#skip_if_unavailable=True#g" || true
   if [[ ! $(sudo grep "skip_if_unavailable=True" ${r} || true) ]]; then
     cat <<EOF | sudo tee -a ${r}
@@ -297,12 +332,11 @@ done
 }
 
 // sudo must already be installed and user must be a sudoer
-def installRPMs(String whichRPMs, boolean usePulpRepos=false) {
+def installRPMs(String whichRPMs, boolean usePulpRepos=false, boolean successOnError=false) {
   enableRcmToolsRepo()
   if (usePulpRepos) { enablePulpRepos() }
   sh '''#!/bin/bash -xe
-sudo yum install -y -q ''' + whichRPMs + '''
-'''
+sudo yum install -y -q ''' + whichRPMs + ''' || ''' + successOnError.toString()
 }
 
 // to log into dockerhub, quay and RHEC, use this method where needed
@@ -324,17 +358,31 @@ echo "''' + CRW_BOT_PASSWORD + '''" | ${PODMAN} login -u="''' + CRW_BOT_USERNAME
   }
 }
 
-// NEW WAY >= CRW 2.6, uses RHEC containerized skopeo build
-// DOES NOT WORK on RHEL7: /lib64/libc.so.6: version `GLIBC_2.28' not found, so fall back to old way from CRW 2.5 Jenkins if Skopeo not installed on RHEL7 node
-def installSkopeoFromContainer(String container) {
-  if (!container?.trim()) {
-    container="registry.redhat.io/rhel8/skopeo"
+// @since 2.10 - latest version of Skopeo in UBI 8.4 is 1.2.3
+def installSkopeo(String minimumVersion="1.1") {
+  installRPMs("skopeo",true,true)
+  versionOK=sh(script: '''#!/bin/bash
+checkVersion() {
+  if [[  "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]]; then
+    echo "true"
+  else
+    echo "false"
+  fi
+}
+SKOPEO_VERSION=""
+if [ ! -z "$(which skopeo)" ] ; then
+  SKOPEO_VERSION="$(skopeo -v 2> /dev/null | awk '{ print $3 }')"
+fi
+checkVersion ''' + minimumVersion + ''' "${SKOPEO_VERSION}"
+  ''', returnStdout: true).trim()
+  if (!versionOK.equals("true")) {
+    installSkopeoFromContainer()
   }
-  installSkopeoFromContainer(container,"1.1")
 }
 
-// note that SElinux needs to be permissive or disabled to volume mount a container to extract file(s)
-def installSkopeoFromContainer(String container, String minimumVersion) {
+// @since 2.6, uses RHEC containerized skopeo build; deprecated as of 2.10, since latest version of Skopeo in UBI 8.4 is 1.2.3 (but we still have RHEL 8.2/8.4 containers from PSI)
+def installSkopeoFromContainer(String container="registry.redhat.io/rhel8/skopeo", String minimumVersion="1.1") {
+  // note that SElinux needs to be permissive or disabled to volume mount a container to extract file(s)
   // default container to use - should be multiarch
   if (!container?.trim()) {
     container="registry.redhat.io/rhel8/skopeo"
@@ -343,6 +391,7 @@ def installSkopeoFromContainer(String container, String minimumVersion) {
     minimumVersion="1.1"
   }
   withCredentials([usernamePassword(credentialsId: 'registry.redhat.io_crw_bot', usernameVariable: 'CRW_BOT_USERNAME', passwordVariable: 'CRW_BOT_PASSWORD')]){
+    installPodman2()
     sh('''#!/bin/bash -xe
 
       # NEW WAY >= CRW 2.6, uses RHEC containerized skopeo build, requires RHEL 8 worker node
@@ -406,33 +455,27 @@ def installSkopeoFromContainer(String container, String minimumVersion) {
   }
 }
 
-// OLD WAY <= CRW 2.5, uses version built in Jenkins from latest sources
-def installSkopeo(String CRW_VERSION) {
-  sh '''#!/bin/bash -xe
-pushd /tmp >/dev/null
-# remove any older versions
-sudo yum remove -y -q skopeo || true
-if [[ ! -x /usr/local/bin/skopeo ]]; then
-  sudo curl -sSLO "https://codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/job/crw-deprecated_''' + CRW_VERSION + '''/lastSuccessfulBuild/artifact/codeready-workspaces-deprecated/skopeo/target/skopeo-$(uname -m).tar.gz"
-fi
-if [[ -f /tmp/skopeo-$(uname -m).tar.gz ]]; then
-  sudo tar xzf /tmp/skopeo-$(uname -m).tar.gz --overwrite -C /usr/local/bin/
-  sudo chmod 755 /usr/local/bin/skopeo
-  sudo rm -f /tmp/skopeo-$(uname -m).tar.gz
-fi
-popd >/dev/null
-skopeo --version
-'''
+// TODO CRW-1534 implement sparse checkout w/ excluded paths (to avoid unneeded respins of registries)
+// https://stackoverflow.com/questions/60559819/scm-polling-with-includedregions-in-jenkins-pipeline-job
+// or https://stackoverflow.com/questions/49812267/call-pathrestriction-in-a-dsl-in-the-sandbox-mode
+
+// to clone a repo for scmpolling only (eg., che-theia); simplifies jenkinsfiles
+def cloneRepoWithBootstrap(String URL, String REPO_PATH, String BRANCH, boolean withPolling=false, String excludeRegions='', String includeRegions='*') {
+  withCredentials([string(credentialsId:'crw_devstudio-release-token', variable: 'GITHUB_TOKEN'), file(credentialsId: 'crw_crw-build-keytab', variable: 'CRW_KEYTAB')]) {
+    if (!BOOTSTRAPPED_F) {
+      BOOTSTRAPPED_F = bootstrap(CRW_KEYTAB)
+    }
+    cloneRepoPoll(URL, REPO_PATH, BRANCH, withPolling, excludeRegions, includeRegions)
+  }
 }
 
-// TODO merge this into cloneRepo if it's working & safe
+// Must be run inside a withCredentials() block, after running bootstrap() [see cloneRepoWithBootstrap()]
 def cloneRepoPoll(String URL, String REPO_PATH, String BRANCH, boolean withPolling=false, String excludeRegions='', String includeRegions='*') {
-  // Requires withCredentials() and bootstrap()
   if (URL.indexOf("pkgs.devel.redhat.com") == -1) {
     // remove http(s) prefix, then trim any token@ prefix too
     URL=URL - ~/http(s*):\/\// - ~/.*@/
-    def AUTH_URL_SHELL="https://\$GITHUB_TOKEN:x-oauth-basic@" + URL
-    def AUTH_URL_GROOVY="https://$GITHUB_TOKEN:x-oauth-basic@" + URL
+    def AUTH_URL_SHELL='https://\$GITHUB_TOKEN:x-oauth-basic@' + URL
+    def AUTH_URL_GROOVY='https://$GITHUB_TOKEN:x-oauth-basic@' + URL
     if (!fileExists(REPO_PATH) || withPolling) {
       // clean before checkout
       sh('''rm -fr ${WORKSPACE}/''' + REPO_PATH)
@@ -460,7 +503,9 @@ export GITHUB_TOKEN=''' + GITHUB_TOKEN + ''' # echo "''' + GITHUB_TOKEN + '''"
 git config user.email "nickboldt+devstudio-release@gmail.com"
 git config user.name "Red Hat Devstudio Release Bot"
 git config --global push.default matching
-# SOLVED :: Fatal: Could not read Username for "https://github.com", No such device or address :: https://github.com/github/hub/issues/1644
+# fix for warning: Pulling without specifying how to reconcile divergent branches is discouraged
+git config --global pull.rebase true
+# Fix for Could not read Username / No such device or address :: https://github.com/github/hub/issues/1644
 git config --global hub.protocol https
 git remote set-url origin ''' + AUTH_URL_SHELL
     )
@@ -478,18 +523,21 @@ git checkout --track origin/''' + BRANCH + ''' || true
 git config user.email crw-build@REDHAT.COM
 git config user.name "CRW Build"
 git config --global push.default matching
+# fix for warning: Pulling without specifying how to reconcile divergent branches is discouraged
+git config --global pull.rebase true
 '''
     )
   }
 }
 
+// Must be run inside a withCredentials() block, after running bootstrap()
+// Deprecated @since 2.9; replaced by cloneRepoPoll() and cloneRepoWithBootstrap()
 def cloneRepo(String URL, String REPO_PATH, String BRANCH) {
-  // Requires withCredentials() and bootstrap()
   if (URL.indexOf("pkgs.devel.redhat.com") == -1) {
     // remove http(s) prefix, then trim any token@ prefix too
     URL=URL - ~/http(s*):\/\// - ~/.*@/
-    def AUTH_URL_SHELL="https://\$GITHUB_TOKEN:x-oauth-basic@" + URL
-    def AUTH_URL_GROOVY="https://$GITHUB_TOKEN:x-oauth-basic@" + URL
+    def AUTH_URL_SHELL='https://\$GITHUB_TOKEN:x-oauth-basic@' + URL
+    def AUTH_URL_GROOVY='https://$GITHUB_TOKEN:x-oauth-basic@' + URL
     if (!fileExists(REPO_PATH)) {
       checkout([$class: 'GitSCM',
         branches: [[name: BRANCH]],
@@ -585,7 +633,6 @@ export GITHUB_TOKEN="''' + GITHUB_TOKEN + '''"
 ''' + updateBaseImages_cmd
 )
   }
-
 }
 
 def getLastCommitSHA(String REPO_PATH) {
@@ -608,14 +655,32 @@ def getCRWShortName(String LONG_NAME) {
   return LONG_NAME.minus("codeready-workspaces-")
 }
 
-def bootstrap(String CRW_KEYTAB) {
-  yumConf()
-  // rpm -qf $(which kinit ssh-keyscan chmod) ==> krb5-workstation openssh-clients coreutils
-  installRPMs("krb5-workstation openssh-clients coreutils git rhpkg jq python3-six python3-pip")
-  // also install commonly needed tools
-  installSkopeoFromContainer("")
-  installYq()
+// see http://hdn.corp.redhat.com/rhel7-csb-stage/repoview/redhat-internal-cert-install.html
+// and http://hdn.corp.redhat.com/rhel7-csb-stage/RPMS/noarch/?C=M;O=D
+def installRedHatInternalCerts() {
   sh('''#!/bin/bash -xe
+  if [[ ! $(rpm -qa | grep redhat-internal-cert-install || true) ]]; then
+    cd /tmp
+    rpm=$(curl -sSLo- "http://hdn.corp.redhat.com/rhel7-csb-stage/RPMS/noarch/?C=M;O=D" | grep cert-install | head -1 | sed -r -e 's#.+>(redhat-internal-cert-install-.+[^<])</a.+#\\1#')
+    curl -sSLkO http://hdn.corp.redhat.com/rhel7-csb-stage/RPMS/noarch/${rpm}
+    sudo yum -y install ${rpm}
+    rm -fr /tmp/${rpm}
+  fi
+  ''')
+}
+
+def bootstrap(String CRW_KEYTAB, boolean force=false) {
+  if (!BOOTSTRAPPED_F || force) {
+    yumConf()
+    // rpm -qf $(which kinit ssh-keyscan chmod) ==> krb5-workstation openssh-clients coreutils
+    installRPMs("krb5-workstation openssh-clients coreutils git rhpkg jq python3-six python3-pip rsync")
+    // install redhat internal certs (so we can connect to jenkins and brew registries)
+    installRedHatInternalCerts()
+    // also install commonly needed tools
+    installSkopeo()
+    installYq()
+    loginToRegistries()
+    sh('''#!/bin/bash -xe
 # bootstrapping: if keytab is lost, upload to
 # https://codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com/credentials/store/system/domain/_/
 # then set Use secret text above and set Bindings > Variable (path to the file) as ''' + CRW_KEYTAB + '''
@@ -642,8 +707,9 @@ export KRB5CCNAME=/var/tmp/crw-build_ccache
 kinit "crw-build/codeready-workspaces-jenkins.rhev-ci-vms.eng.rdu2.redhat.com@REDHAT.COM" -kt ''' + CRW_KEYTAB + '''
 # verify keytab loaded
 # klist
-'''
-  )
+''')
+  }
+  return true
 }
 
 def notifyBuildFailed() {
@@ -679,7 +745,8 @@ fi
 
 // ensure static Dockerfiles have the correct version encoded in them, then commit changes
 def updateDockerfileVersions(String dir="${WORKSPACE}/sources", String branch=MIDSTM_BRANCH, String CRW_VERSION=CRW_VERSION_F) {
-  sh('''#!/bin/bash -xe
+  sh('''#!/bin/bash -e
+echo "[INFO] Run util.updateDockerfileVersions('''+dir+''', '''+branch+''', '''+CRW_VERSION+''')"
 cd ''' + dir + ''' || exit 1
 for d in $(find . -name "*ockerfile*" -type f); do
   sed -i $d -r -e 's#version="[0-9.]+"#version="''' + CRW_VERSION + '''"#g' || true
@@ -780,21 +847,24 @@ def getLastFailedBuildId(String url) {
 
 // TODO: add a timeout?
 def waitForNewBuild(String jobURL, int oldId) {
-  // echo "Id baseline for " + jobURL + " :: " + oldId
+  echo "Id baseline for " + jobURL + "/lastBuild :: " + oldId
   while (true) {
       newId=getLastSuccessfulBuildId(jobURL)
       if (newId > oldId && getLastBuildResult(jobURL).equals("SUCCESS")) {
           println "Id rebuilt (SUCCESS): " + newId
+          return true
           break
       } else {
         if (newId > oldId && getLastFailedBuildId(jobURL).equals(newId)) {
           println "Id rebuilt (FAILURE): " + newId
           return false
+          break
         }
         newId=getLastBuildId(jobURL)
         if (newId > oldId && getLastBuildResult(jobURL).equals("FAILURE")) {
           println "Id rebuilt (FAILURE): " + newId
           return false
+          break
         }
       }
       nextId=oldId+1

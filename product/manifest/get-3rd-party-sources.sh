@@ -103,8 +103,8 @@ if [[ ${phases} == *"1"* ]]; then
 
     # check NVR for a matching tarball or tarballs
     if [[ ! -f ${WORKSPACE}/NVRs.txt ]]; then
-        mnf "Latest image list --${MIDSTM_BRANCH}"
-        ../getLatestImageTags.sh --${MIDSTM_BRANCH} --nvr | tee ${WORKSPACE}/NVRs.txt
+        mnf "Latest image list for branch ${MIDSTM_BRANCH}"
+        ../getLatestImageTags.sh -b ${MIDSTM_BRANCH} --nvr | tee ${WORKSPACE}/NVRs.txt
         mnf ""
     fi
     mnf "Sorted image list"
@@ -141,8 +141,8 @@ if [[ ${phases} == *"2"* ]]; then
     pushd ../../dependencies/che-plugin-registry >/dev/null
         URLsAll=""
         URLs=""
-        for d in $(find . -name meta.yaml | sort); do 
-            URLsAll="${URLsAll} $(cat $d | egrep "\.vsix|\.theia" | grep github | grep releases | sed -e "s@- @@")"
+        for d in $(find . -name \*.yaml | sort); do 
+            URLsAll="${URLsAll} $(cat $d | grep -E "\.vsix|\.theia" | grep github | grep releases | sed -r -e "s@- @@" -e "s@extension: @@" | tr -d "'\"")"
         done
         if [[ $URLsAll ]]; then
             for u in $URLsAll; do 

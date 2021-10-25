@@ -6,8 +6,9 @@ projects:
   -
     name: CPP
     source:
-      type: git
       location: 'https://github.com/crw-samples/C-Plus-Plus.git'
+      branch: master
+      type: git
 components:
 -
   type: chePlugin
@@ -19,7 +20,7 @@ components:
 -
   type: dockerimage
   alias: cpp-dev
-  image: registry.redhat.io/codeready-workspaces/stacks-cpp-rhel8:2.8
+  image: registry.redhat.io/codeready-workspaces/stacks-cpp-rhel8:2.10
   memoryLimit: 512Mi
   mountSources: true
 commands:

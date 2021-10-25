@@ -1,34 +1,13 @@
 [rhel-8-for-appstream-rpms-pulp]
 name=rhel-8-for-appstream-rpms-pulp
 baseurl=http://rhsm-pulp.corp.redhat.com/content/dist/rhel8/8/$basearch/appstream/os
-enabled=0
+enabled=1
 gpgcheck=0
 skip_if_unavailable=True
  
 [rhel-8-for-baseos-rpms-pulp]
 name=rhel-8-for-baseos-rpms-pulp
 baseurl=http://rhsm-pulp.corp.redhat.com/content/dist/rhel8/8/$basearch/baseos/os
-enabled=0
-gpgcheck=0
-skip_if_unavailable=True
-
-[Fyre-Base]
-name=Fyre Local OS repository
-baseurl=http://fyreyum1.fyre.ibm.com/redhat/yum/server/8/8/x86_64/baseos/os/
-enabled=1
-gpgcheck=0
-skip_if_unavailable=True
-
-[Fyre-Supplementary]
-name=Fyre Local Supplementary repository
-baseurl=http://fyreyum1.fyre.ibm.com/redhat/yum/server/8/8/x86_64/supplementary/os/
-enabled=1
-gpgcheck=0
-skip_if_unavailable=True
-
-[Fyre-Appstream]
-name=Fyre Local Appstream repository
-baseurl=http://fyreyum1.fyre.ibm.com/redhat/yum/server/8/8/x86_64/appstream/os/
 enabled=1
 gpgcheck=0
 skip_if_unavailable=True

@@ -14,7 +14,7 @@
 
 # Builder: check meta.yamls and create index.json
 # https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/ubi8/python-38
-FROM registry.access.redhat.com/ubi8/python-38:1-54 as builder
+FROM registry.access.redhat.com/ubi8/python-38:1-54.1618436884 as builder
 USER 0
 
 ################# 
@@ -76,12 +76,11 @@ RUN chmod -R g+rwX /build/devfiles
 ################# 
 
 # Build registry, copying meta.yamls and index.json from builder
-# UPSTREAM: use RHEL7/RHSCL/httpd image so we're not required to authenticate with registry.redhat.io
-# https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/rhscl/httpd-24-rhel7
-FROM registry.access.redhat.com/rhscl/httpd-24-rhel7:2.4-139 AS registry
+# https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/ubi8/httpd-24
+FROM registry.access.redhat.com/ubi8/httpd-24:1-143 AS registry
 
 # Build Arguments
-ARG PRODUCT_VERSION=1.2.5
+ARG PRODUCT_VERSION=1.4.0
 
 ENV PRODUCT="IBM Wazi Developer for Red Hat CodeReady Workspaces" \
     COMPANY="IBM" \
@@ -89,8 +88,14 @@ ENV PRODUCT="IBM Wazi Developer for Red Hat CodeReady Workspaces" \
     RELEASE="1" \
     SUMMARY="IBM Wazi Developer for Workspaces" \
     DESCRIPTION="IBM Wazi Developer for Red Hat CodeReady Workspaces - Devfile" \
-    PRODNAME="wazi-codeready-workspaces" \
-    PRODTAG="wazi-code-dev-file"
+    PRODTAG="ibm-wazi-developer-for-workspaces-dev-file" \
+    CLOUDPAK_ID="9d41d2d8126f4200b62ba1acc0dffa2e" \
+    CLOUDPAK_METRIC="VIRTUAL_PROCESSOR_CORE" \
+    PRODUCT_NAME="Code" \
+    PRODUCT_ID="0e775d0d3f354a5ca074a6a4398045f3" \
+    PRODUCT_METRIC="AUTHORIZED_USER" \
+    PRODUCT_CHARGED_CONTAINERS="All" \
+    PRODUCT_CLOUDPAK_RATIO="5:1"
         
 LABEL name="$PRODUCT" \
       vendor="$COMPANY" \
@@ -104,31 +109,35 @@ LABEL name="$PRODUCT" \
       io.openshift.tags="$PRODTAG,$COMPANY" \
       com.redhat.component="$PRODTAG" \
       io.openshift.expose-services="" \
-      productName="$PRODUCT" \
-      productVersion="$VERSION"
+      cloudpakName="$PRODUCT" \
+      cloudpakId="$CLOUDPAK_ID" \
+      cloudpakMetric="$CLOUDPAK_METRIC" \
+      productName="$PRODUCT_NAME" \
+      productVersion="$VERSION" \
+      productID="$PRODUCT_ID" \
+      productMetric="$PRODUCT_METRIC" \
+      productChargedContainers="$PRODUCT_CHARGED_CONTAINERS" \
+      productCloudpakRatio="$PRODUCT_CLOUDPAK_RATIO"
 
-# DOWNSTREAM: use RHEL8/httpd
-# https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/rhel8/httpd-24
-# FROM registry.redhat.io/rhel8/httpd-24:1-130 AS registry
 USER 0
 
 # latest httpd container doesn't include ssl cert, so generate one
 RUN chmod +x /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh && \
     /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh
+
 RUN \
     yum -y -q update && \
     yum -y -q clean all && rm -rf /var/cache/yum && \
     echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages"
-# Fix for htaccess from VA Scan
-RUN echo "<FilesMatch "\""^\\.ht"\"">" >> /etc/httpd/conf/httpd.conf && \
-    echo "Require all denied" >> /etc/httpd/conf/httpd.conf && \
-    echo "</FilesMatch>" >> /etc/httpd/conf/httpd.conf
-# Fix for SSL from VA Scan
-RUN sed -i /etc/httpd/conf.d/ssl.conf \
-    -e "s,SSLProtocol all -SSLv2,SSLProtocol all -SSLv3," \
-    -e "s,SSLCipherSuite HIGH:MEDIUM:!aNULL:!MD5,SSLCipherSuite HIGH:!aNULL:!MD5,"
 
-# BEGIN these steps might not be required
+RUN sed -i /etc/httpd/conf.d/ssl.conf \
+    -e "s,.*SSLProtocol.*,SSLProtocol all -SSLv3," \
+    -e "s,.*SSLCipherSuite.*,SSLCipherSuite HIGH:!aNULL:!MD5,"
+
+RUN sed -i /etc/httpd/conf/httpd.conf \
+    -e "s,\.ht\*,^\\\.ht," \
+    -e "s,Files,FilesMatch,"
+
 RUN sed -i /etc/httpd/conf/httpd.conf \
     -e "s,Listen 80,Listen 8080," \
     -e "s,logs/error_log,/dev/stderr," \
@@ -136,7 +145,6 @@ RUN sed -i /etc/httpd/conf/httpd.conf \
     -e "s,AllowOverride None,AllowOverride All," && \
     chmod a+rwX /etc/httpd/conf /run/httpd /etc/httpd/logs/
 STOPSIGNAL SIGWINCH
-# END these steps might not be required
 
 WORKDIR /var/www/html
 

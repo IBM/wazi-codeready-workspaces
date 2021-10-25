@@ -6,8 +6,8 @@ projects:
   - name: nodejs-configmap
     source:
       location: "https://github.com/crw-samples/nodejs-configmap.git"
-      type: git
       branch: 12.x
+      type: git
 components:
   - id: vscode/typescript-language-features/latest
     type: chePlugin
@@ -17,7 +17,7 @@ components:
     type: dockerimage
     memoryLimit: 1Gi
     alias: nodejs
-    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.8
+    image: registry.redhat.io/codeready-workspaces/plugin-java8-rhel8:2.10
     endpoints:
       - name: "nodejs"
         port: 8080

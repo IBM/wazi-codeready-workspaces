@@ -1,0 +1,43 @@
+#
+# Copyright IBM Corporation 2021
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+# Contributors:
+#   IBM Corporation - implementation
+#
+
+apiVersion: v2
+publisher: ibm
+name: wazi-developer
+version: latest
+type: VS Code extension
+displayName: Wazi Developer
+title: COBOL, PL/I, HLASM, REXX stack for IBM Z Open Editor 1.4.0, Zowe Explorer 1.19.0, Zowe CLI 6.33.3
+description: Provides COBOL, PL/I, HLASM, and REXX language servers as well as tools for IBM Z development.
+icon: /images/wazi-developer-icon.png
+repository: https://github.com/IBM/zopeneditor-about.git
+category: Language
+firstPublicationDate: "2021-10-29"
+spec:
+  containers:
+  - image: icr.io/wazi-code/ibm-wazi-developer-for-workspaces-codeready@sha256:28beb27a2c9d6441cc8e16d19192e004d14701f31e0b9ffdf21cd9b5f0e8f0aa
+    name: wazi-plugins
+    memoryLimit: 3000Mi
+    cpuLimit: 500m
+    cpuRequest: 30m
+    args:
+      - sh
+      - -c
+      - ${PLUGIN_REMOTE_ENDPOINT_EXECUTABLE}
+    volumes:
+    - mountPath: "/home/wazi/.zowe"
+      name: zowe
+    - mountPath: "/home/wazi/.m2"
+      name: m2
+  extensions:
+  - relative:extension/plugins/ibm/wazi-developer/latest/extensions/wazi-vscode-extension-for-zowe.vsix
+  - relative:extension/plugins/ibm/wazi-developer/latest/extensions/zopeneditor.vsix

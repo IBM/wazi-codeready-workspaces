@@ -14,12 +14,8 @@
 
 # Builder: check meta.yamls and create index.json
 # https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/ubi8/python-38
-FROM registry.access.redhat.com/ubi8/python-38:1-54.1618436884 as builder
+FROM registry.access.redhat.com/ubi8/python-38:1-60 as builder
 USER 0
-
-################# 
-# PHASE ONE: create ubi8 image with yq
-################# 
 
 ARG BOOTSTRAP=false
 ENV BOOTSTRAP=${BOOTSTRAP}
@@ -51,34 +47,28 @@ COPY ./build/dockerfiles/content_set*.repo /etc/yum.repos.d/
 COPY ./build/dockerfiles/rhel.install.sh /tmp
 RUN /tmp/rhel.install.sh && rm -f /tmp/rhel.install.sh
 
-COPY ./build/scripts/*.sh ./build/scripts/meta.yaml.schema /build/
-COPY ./v3 /build/v3
+COPY ./build/scripts/*.sh /build/
+COPY che-*.yaml /build/
+COPY resources.tgz /build/
+COPY ./v3/plugins/ /build/v3/plugins/
+COPY ./v3/images/*.png /build/v3/images/
 WORKDIR /build/
 
-# if only including the /latest/ plugins, apply this line to remove them from builder
-# RUN ./keep_only_latest.sh
-RUN ./generate_latest_metas.sh v3
-RUN ./check_plugins_location.sh v3
-RUN ./set_plugin_dates.sh v3
-RUN ./check_metas_schema.sh v3
-RUN ./swap_images.sh v3
-RUN ./swap_plugins_memory.sh v3
-RUN if [[ ${USE_DIGESTS} == "true" ]]; then ./write_image_digests.sh v3; fi
-RUN ./index.sh v3 > /build/v3/plugins/index.json
-RUN ./list_referenced_images.sh v3 > /build/v3/external_images.txt
+RUN tar -xvf resources.tgz -C ./
+RUN rm -rf ./output/v3/che-theia-plugins.yaml ./output/v3/che-editors.yaml ./output/v3/che-plugins.yaml
+RUN ./swap_images.sh ./output/v3 --use-generated-content
+RUN ./swap_plugins_memory.sh ./output/v3
+RUN if [[ ${USE_DIGESTS} == "true" ]]; then ./write_image_digests.sh ./output/v3; fi
+RUN ./list_referenced_images.sh ./output/v3 --use-generated-content > /build/output/v3/external_images.txt && cat /build/output/v3/external_images.txt
 RUN chmod -R g+rwX /build
 
-################# 
-# PHASE TWO: configure registry image
-################# 
-
 # Build registry, copying meta.yamls and index.json from builder
-# UPSTREAM: use RHEL7/RHSCL/httpd image so we're not required to authenticate with registry.redhat.io
-# https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/rhscl/httpd-24-rhel7
-FROM registry.access.redhat.com/rhscl/httpd-24-rhel7:2.4-136.1614612498 AS registry
+# https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/ubi8/httpd-24
+FROM registry.access.redhat.com/ubi8/httpd-24:1-143 AS registry
+USER 0
 
 # Build Arguments
-ARG PRODUCT_VERSION=1.2.5
+ARG PRODUCT_VERSION=1.4.0
 
 ENV PRODUCT="IBM Wazi Developer for Red Hat CodeReady Workspaces" \
     COMPANY="IBM" \
@@ -86,7 +76,14 @@ ENV PRODUCT="IBM Wazi Developer for Red Hat CodeReady Workspaces" \
     RELEASE="1" \
     SUMMARY="IBM Wazi Developer for Workspaces" \
     DESCRIPTION="IBM Wazi Developer for Red Hat CodeReady Workspaces - Plugin" \
-    PRODTAG="wazi-code-plugin"
+    PRODTAG="ibm-wazi-developer-for-workspaces-plugin" \
+    CLOUDPAK_ID="9d41d2d8126f4200b62ba1acc0dffa2e" \
+    CLOUDPAK_METRIC="VIRTUAL_PROCESSOR_CORE" \
+    PRODUCT_NAME="Code" \
+    PRODUCT_ID="0e775d0d3f354a5ca074a6a4398045f3" \
+    PRODUCT_METRIC="AUTHORIZED_USER" \
+    PRODUCT_CHARGED_CONTAINERS="All" \
+    PRODUCT_CLOUDPAK_RATIO="5:1"
 
 LABEL name="$PRODUCT" \
       vendor="$COMPANY" \
@@ -100,31 +97,33 @@ LABEL name="$PRODUCT" \
       io.openshift.tags="$PRODTAG,$COMPANY" \
       com.redhat.component="$PRODTAG" \
       io.openshift.expose-services="" \
-      productName="$PRODUCT" \
-      productVersion="$VERSION"
-
-# DOWNSTREAM: use RHEL8/httpd
-# https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/rhel8/httpd-24
-# FROM registry.redhat.io/rhel8/httpd-24:1-130.1618434979 AS registry
-USER 0
+      cloudpakName="$PRODUCT" \
+      cloudpakId="$CLOUDPAK_ID" \
+      cloudpakMetric="$CLOUDPAK_METRIC" \
+      productName="$PRODUCT_NAME" \
+      productVersion="$VERSION" \
+      productID="$PRODUCT_ID" \
+      productMetric="$PRODUCT_METRIC" \
+      productChargedContainers="$PRODUCT_CHARGED_CONTAINERS" \
+      productCloudpakRatio="$PRODUCT_CLOUDPAK_RATIO"
 
 # latest httpd container doesn't include ssl cert, so generate one
 RUN chmod +x /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh && \
     /usr/share/container-scripts/httpd/pre-init/40-ssl-certs.sh
+
 RUN \
-    yum -y -q update && \
+    yum -y -q --nobest update && \
     yum -y -q clean all && rm -rf /var/cache/yum && \
     echo "Installed Packages" && rpm -qa | sort -V && echo "End Of Installed Packages"
-# Fix for htaccess from VA Scan
-RUN echo "<FilesMatch "\""^\\.ht"\"">" >> /etc/httpd/conf/httpd.conf && \
-    echo "Require all denied" >> /etc/httpd/conf/httpd.conf && \
-    echo "</FilesMatch>" >> /etc/httpd/conf/httpd.conf
-# Fix for SSL from VA Scan
-RUN sed -i /etc/httpd/conf.d/ssl.conf \
-    -e "s,SSLProtocol all -SSLv2,SSLProtocol all -SSLv3," \
-    -e "s,SSLCipherSuite HIGH:MEDIUM:!aNULL:!MD5,SSLCipherSuite HIGH:!aNULL:!MD5,"
 
-# BEGIN these steps might not be required
+RUN sed -i /etc/httpd/conf.d/ssl.conf \
+    -e "s,.*SSLProtocol.*,SSLProtocol all -SSLv3," \
+    -e "s,.*SSLCipherSuite.*,SSLCipherSuite HIGH:!aNULL:!MD5,"
+
+RUN sed -i /etc/httpd/conf/httpd.conf \
+    -e "s,\.ht\*,^\\\.ht," \
+    -e "s,Files,FilesMatch,"
+
 RUN sed -i /etc/httpd/conf/httpd.conf \
     -e "s,Listen 80,Listen 8080," \
     -e "s,logs/error_log,/dev/stderr," \
@@ -132,27 +131,19 @@ RUN sed -i /etc/httpd/conf/httpd.conf \
     -e "s,AllowOverride None,AllowOverride All," && \
     chmod a+rwX /etc/httpd/conf /run/httpd /etc/httpd/logs/
 STOPSIGNAL SIGWINCH
-# END these steps might not be required
 
 WORKDIR /var/www/html
 
 RUN mkdir -m 777 /var/www/html/v3
-COPY README.md .htaccess /var/www/html/
-COPY --from=builder /build/v3 /var/www/html/v3
 COPY ./LICENSE /licenses/
+COPY README.md .htaccess /var/www/html/
+COPY --from=builder /build/output/v3 /var/www/html/v3
+COPY --from=builder /build/v3/plugins/ /var/www/html/v3/plugins/
+COPY --from=builder /build/v3/images/ /var/www/html/v3/images/
 COPY ./build/dockerfiles/rhel.entrypoint.sh ./build/dockerfiles/entrypoint.sh /usr/local/bin/
 RUN chmod g+rwX /usr/local/bin/entrypoint.sh /usr/local/bin/rhel.entrypoint.sh && \
     chgrp -R 0 /var/www/html && chmod -R g+rw /var/www/html
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/usr/local/bin/rhel.entrypoint.sh"]
-
-# Offline build: cache .theia and .vsix files in registry itself and update metas
-# multiple temp stages does not work in Brew
-FROM builder AS offline-builder
-RUN ./cache_artifacts.sh v3 && \
-    chmod -R g+rwX /build
-
-FROM registry AS offline-registry
-COPY --from=offline-builder /build/v3 /var/www/html/v3
 
 # append Brew metadata here
