@@ -21,7 +21,7 @@ description: This VS Code extension provides support for IBM Z debugging, based 
 icon: /images/wazi-debug-icon.png
 repository: https://github.com/IBM/zopendebug-about.git
 category: Language
-firstPublicationDate: "2021-10-29"
+firstPublicationDate: "2021-11-23"
 spec:
   extensions:
   - relative:extension/plugins/ibm/wazi-debug/latest/extensions/zopendebug.vsix

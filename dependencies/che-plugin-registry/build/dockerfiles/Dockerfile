@@ -64,11 +64,11 @@ RUN chmod -R g+rwX /build
 
 # Build registry, copying meta.yamls and index.json from builder
 # https://access.redhat.com/containers/?tab=tags#/registry.access.redhat.com/ubi8/httpd-24
-FROM registry.access.redhat.com/ubi8/httpd-24:1-143 AS registry
+FROM registry.access.redhat.com/ubi8/httpd-24:1-161 AS registry
 USER 0
 
 # Build Arguments
-ARG PRODUCT_VERSION=1.4.0
+ARG PRODUCT_VERSION=1.4.1
 
 ENV PRODUCT="IBM Wazi Developer for Red Hat CodeReady Workspaces" \
     COMPANY="IBM" \
